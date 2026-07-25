@@ -47,11 +47,10 @@ interface Booking {
   status: string;
   check_in_date: string;
   created_at: string;
-  customers: {
-    name: string;
+  profiles: {
+    full_name: string;
     phone: string;
     email: string;
-    address: string;
   } | null;
   rooms: {
     name: string;
@@ -321,8 +320,8 @@ export default function AdminDashboard() {
   // Filtered Bookings
   const filteredBookings = bookings.filter((b) => {
     const search = bookingsSearch.toLowerCase();
-    const guestName = b.customers?.name?.toLowerCase() || '';
-    const guestPhone = b.customers?.phone?.toLowerCase() || '';
+    const guestName = b.profiles?.full_name?.toLowerCase() || '';
+    const guestPhone = b.profiles?.phone?.toLowerCase() || '';
     return guestName.includes(search) || guestPhone.includes(search);
   });
 
@@ -330,10 +329,9 @@ export default function AdminDashboard() {
   const handleExportBookings = () => {
     const exportData = filteredBookings.map((b) => ({
       'Booking ID': b.id.slice(0, 8).toUpperCase(),
-      'Guest Name': b.customers?.name || 'N/A',
-      'Phone Number': b.customers?.phone || 'N/A',
-      'Email Address': b.customers?.email || 'N/A',
-      'Residential Address': b.customers?.address || 'N/A',
+      'Guest Name': b.profiles?.full_name || 'N/A',
+      'Phone Number': b.profiles?.phone || 'N/A',
+      'Email Address': b.profiles?.email || 'N/A',
       'Room Reserved': b.rooms?.name || 'N/A',
       'Guests Count': b.number_of_people,
       'Check-in Date': b.check_in_date,
@@ -821,12 +819,9 @@ export default function AdminDashboard() {
                                 {b.id.slice(0, 8).toUpperCase()}
                               </td>
                               <td className="py-4 px-6 space-y-0.5">
-                                <div className="font-semibold text-text-primary">{b.customers?.name || 'N/A'}</div>
-                                <div className="text-xs text-text-muted font-mono">{b.customers?.phone}</div>
-                                <div className="text-xs text-text-muted font-mono">{b.customers?.email}</div>
-                                <div className="text-xs text-text-muted max-w-[200px] truncate" title={b.customers?.address}>
-                                  {b.customers?.address}
-                                </div>
+                                <div className="font-semibold text-text-primary">{b.profiles?.full_name || 'N/A'}</div>
+                                <div className="text-xs text-text-muted font-mono">{b.profiles?.phone}</div>
+                                <div className="text-xs text-text-muted font-mono">{b.profiles?.email}</div>
                               </td>
                               <td className="py-4 px-6 space-y-0.5">
                                 <div className="font-semibold text-text-primary">{b.rooms?.name || 'N/A'}</div>
