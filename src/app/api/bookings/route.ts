@@ -80,11 +80,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Create Booking
+    // 4. Validate Razorpay configurations for paid bookings
     const rzpKeyId = process.env.RAZORPAY_KEY_ID;
     const rzpSecret = process.env.RAZORPAY_KEY_SECRET;
-    const isPaymentEnabled = !!(rzpKeyId && rzpSecret);
 
+    if (!rzpKeyId || !rzpSecret) {
+      console.error('Server side configuration missing: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not set.');
+      return NextResponse.json(
+        { success: false, error: 'Payment gateway configuration is missing on the server. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.' },
+        { status: 500 }
+      );
+    }
+
+    // Create Booking under 'pending' status
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .insert({
@@ -93,7 +101,7 @@ export async function POST(request: NextRequest) {
         room_or_activity_id: room.id,
         check_in: body.checkInDate,
         amount: room.price_per_night,
-        status: isPaymentEnabled ? 'pending' : 'confirmed', // pending for Phase 2, confirmed for Phase 1
+        status: 'pending',
       })
       .select()
       .single();
@@ -119,44 +127,51 @@ export async function POST(request: NextRequest) {
       console.error('Failed to decrement available units:', roomUpdateError);
     }
 
-    // 6. Handle Razorpay Order Creation (Phase 2)
-    if (isPaymentEnabled) {
-      try {
-        const razorpay = new Razorpay({
-          key_id: rzpKeyId!,
-          key_secret: rzpSecret!,
-        });
+    // 6. Handle Razorpay Order Creation (Mandatory for all paid rooms)
+    try {
+      const razorpay = new Razorpay({
+        key_id: rzpKeyId,
+        key_secret: rzpSecret,
+      });
 
-        const order = await razorpay.orders.create({
-          amount: Math.round(room.price_per_night * 100), // paise
-          currency: 'INR',
-          receipt: bookingId,
-        });
+      const order = await razorpay.orders.create({
+        amount: Math.round(room.price_per_night * 100), // paise
+        currency: 'INR',
+        receipt: bookingId,
+      });
 
-        // Store payment order record in DB
-        await supabase.from('payments').insert({
-          booking_id: bookingId,
-          razorpay_order_id: order.id,
-          amount: room.price_per_night,
-          status: 'created',
-        });
+      // Store payment order record in DB
+      await supabase.from('payments').insert({
+        booking_id: bookingId,
+        razorpay_order_id: order.id,
+        amount: room.price_per_night,
+        status: 'created',
+      });
 
-        return NextResponse.json({
-          success: true,
-          bookingId,
-          roomName,
-          customerName: body.customerName,
-          customerEmail: body.customerEmail,
-          numberOfPeople: body.numberOfPeople,
-          checkInDate: body.checkInDate,
-          paymentRequired: true,
-          orderId: order.id,
-          razorpayKeyId: rzpKeyId,
-        });
-      } catch (rzpErr) {
-        console.error('Razorpay order creation failed:', rzpErr);
-        // Fallback to confirmed flow if Razorpay API fails so booking is not lost
-      }
+      return NextResponse.json({
+        success: true,
+        bookingId,
+        roomName,
+        customerName: body.customerName,
+        customerEmail: body.customerEmail,
+        numberOfPeople: body.numberOfPeople,
+        checkInDate: body.checkInDate,
+        paymentRequired: true,
+        orderId: order.id,
+        razorpayKeyId: rzpKeyId,
+      });
+    } catch (rzpErr) {
+      console.error('Razorpay order creation failed:', rzpErr);
+      
+      // ROLLBACK: Delete booking and restore room units so database state stays consistent
+      await supabase.from('bookings').delete().eq('id', bookingId);
+      await supabase.from('rooms').update({ available_units: room.available_units }).eq('id', room.id);
+      
+      const errMsg = rzpErr instanceof Error ? rzpErr.message : String(rzpErr);
+      return NextResponse.json(
+        { success: false, error: `Failed to create payment gateway order: ${errMsg}` },
+        { status: 500 }
+      );
     }
 
     // 7. Send Immediate Confirmation Email (Phase 1 / Payment Disabled Fallback)
@@ -172,11 +187,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (resend) {
+      const client = resend as NonNullable<typeof resend>;
       const emailPromises: Promise<unknown>[] = [];
 
       // Customer Email
       emailPromises.push(
-        resend.emails
+        client.emails
           .send({
             from: `Hill View Bookings <${fromEmail}>`,
             to: body.customerEmail,
@@ -223,11 +239,12 @@ export async function POST(request: NextRequest) {
 
       // Owner Email
       if (ownerEmail) {
+        const toEmail = ownerEmail as string;
         emailPromises.push(
-          resend.emails
+          client.emails
             .send({
               from: `Hill View Bookings <${fromEmail}>`,
-              to: ownerEmail,
+              to: toEmail,
               subject: 'New Booking Confirmed — Hill View',
               html: `
                 <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
