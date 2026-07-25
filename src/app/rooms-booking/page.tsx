@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import Script from 'next/script';
 import Image from 'next/image';
 import { fetchRooms, submitBooking } from '@/lib/api';
 import { useBooking } from '@/context/BookingContext';
@@ -132,20 +133,7 @@ export default function RoomsBookingWizard() {
     loadRooms();
   }, []);
 
-  // Dynamically load Razorpay checkout script
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    document.body.appendChild(script);
-    return () => {
-      try {
-        document.body.removeChild(script);
-      } catch {
-        // ignore if already unmounted
-      }
-    };
-  }, []);
+
 
   // Compute Day of Week
   const dayOfWeek = useMemo(() => {
@@ -227,24 +215,39 @@ export default function RoomsBookingWizard() {
 
   // Submit Booking (Step 4 Reserve)
   const handleReserveSubmit = async () => {
-    if (!isFormValid || !isFormLocked || !selectedRoom) return;
+    if (!isFormValid || !isFormLocked || !selectedRoom) {
+      console.warn('handleReserveSubmit cancelled because form validation or selection is not ready.');
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
+    console.log('Sending booking request to server...', form);
 
     let paymentLaunched = false;
 
     try {
       const result = await submitBooking(form);
+      console.log('Received booking result from API:', result);
 
       if (result.success) {
         // If Razorpay payment integration is enabled and required
         if (result.paymentRequired) {
+          console.log('Razorpay payment is required. Preparing checkout options...', {
+            orderId: result.orderId,
+            razorpayKeyId: result.razorpayKeyId,
+          });
+
           paymentLaunched = true;
           
           const supabase = getSupabase();
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token || '';
+
+          if (!(window as unknown as { Razorpay: unknown }).Razorpay) {
+            console.error('Razorpay SDK is not loaded. window.Razorpay is undefined.');
+            throw new Error('Razorpay Checkout SDK failed to load. Please verify your internet connection, disable any adblockers, and try again.');
+          }
 
           const options = {
             key: result.razorpayKeyId,
@@ -254,6 +257,7 @@ export default function RoomsBookingWizard() {
             description: selectedRoom.name,
             order_id: result.orderId,
             handler: async function (response: { razorpay_payment_id: string; razorpay_signature: string }) {
+              console.log('Payment checkout callback received. Verifying signature on server...', response);
               setIsSubmitting(true);
               setSubmitError(null);
               
@@ -271,6 +275,7 @@ export default function RoomsBookingWizard() {
                 });
 
                 const verifyData = await verifyResponse.json();
+                console.log('Payment verification response from server:', verifyData);
                 
                 if (verifyData.success) {
                   setBookingData({
@@ -283,10 +288,12 @@ export default function RoomsBookingWizard() {
                   });
                   router.push('/rooms-booking/confirmation');
                 } else {
+                  console.error('Server signature verification failed:', verifyData.error);
                   setSubmitError(verifyData.error || 'Payment signature verification failed.');
                   setIsFormLocked(false);
                 }
-              } catch {
+              } catch (verifyErr) {
+                console.error('Network error during signature verification:', verifyErr);
                 setSubmitError('Verification error. Please contact property care directly.');
                 setIsFormLocked(false);
               } finally {
@@ -310,14 +317,17 @@ export default function RoomsBookingWizard() {
             };
           }).Razorpay;
 
+          console.log('Opening Razorpay Checkout overlay popup...');
           const rzp = new RazorpayConstructor(options);
           rzp.on('payment.failed', function (response: { error: { description: string } }) {
+            console.error('Payment checkout failed callback:', response.error);
             setSubmitError(response.error.description || 'Payment transaction failed.');
             setIsFormLocked(false);
           });
           rzp.open();
           setIsSubmitting(false);
         } else {
+          console.log('Razorpay payment not required. Proceeding directly to confirmation screen.');
           // Standard confirmed booking (Deferred payment)
           setBookingData({
             customerName: form.customerName,
@@ -330,11 +340,13 @@ export default function RoomsBookingWizard() {
           router.push('/rooms-booking/confirmation');
         }
       } else {
+        console.error('Booking creation API returned failure:', result.error);
         setSubmitError(result.error || 'Failed to complete reservation. Please try again.');
         setIsFormLocked(false);
       }
-    } catch {
-      setSubmitError('Connection error. Please check your internet connection.');
+    } catch (err) {
+      console.error('Exception caught in handleReserveSubmit:', err);
+      setSubmitError(err instanceof Error ? err.message : 'Connection error. Please check your internet connection.');
       setIsFormLocked(false);
     } finally {
       if (!paymentLaunched) {
@@ -934,7 +946,7 @@ export default function RoomsBookingWizard() {
           )}
 
         </AnimatePresence>
-
+        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       </div>
     </main>
   );
