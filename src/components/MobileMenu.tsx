@@ -1,9 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV_LINKS } from '@/lib/types';
+import { getSupabase } from '@/lib/supabaseClient';
 import {
   menuSlide,
   overlayFade,
@@ -12,6 +14,8 @@ import {
 } from '@/lib/animations';
 import MotionButton from './MotionButton';
 
+import { type User } from '@supabase/supabase-js';
+
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +23,24 @@ interface MobileMenuProps {
 
 export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const pathname = usePathname();
+  const [user, setUser] = useState<User | null>(null);
+
+  // Sync auth state dynamically inside mobile menu
+  useEffect(() => {
+    const supabase = getSupabase();
+    
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      setUser(authUser);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <AnimatePresence>
@@ -89,6 +111,33 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   </Link>
                 </motion.li>
               ))}
+              <motion.li key="auth-link" variants={menuItem}>
+                {user ? (
+                  <Link
+                    href="/profile"
+                    onClick={onClose}
+                    className={`block py-3 px-4 rounded-xl text-lg font-medium transition-colors ${
+                      pathname === '/profile'
+                        ? 'text-white bg-white/10'
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Profile
+                  </Link>
+                ) : (
+                  <Link
+                    href="/login"
+                    onClick={onClose}
+                    className={`block py-3 px-4 rounded-xl text-lg font-medium transition-colors ${
+                      pathname === '/login'
+                        ? 'text-white bg-white/10'
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    Login
+                  </Link>
+                )}
+              </motion.li>
             </motion.ul>
 
             {/* Book Now CTA */}

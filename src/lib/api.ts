@@ -27,6 +27,10 @@ export async function submitBooking(
   formData: BookingFormData
 ): Promise<BookingResult> {
   try {
+    const supabase = getSupabase();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || '';
+
     const response = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,6 +42,7 @@ export async function submitBooking(
         selectedRoom: formData.selectedRoom,
         customerEmail: formData.customerEmail,
         checkInDate: formData.checkInDate,
+        token,
       }),
     });
 

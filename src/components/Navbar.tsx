@@ -4,12 +4,16 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV_LINKS } from '@/lib/types';
+import { getSupabase } from '@/lib/supabaseClient';
 import MotionButton from './MotionButton';
 import MobileMenu from './MobileMenu';
+
+import { type User } from '@supabase/supabase-js';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const pathname = usePathname();
 
   const isLightPage = pathname === '/rooms-booking' || pathname.startsWith('/rooms-booking/');
@@ -22,6 +26,23 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
+
+  // Sync auth state dynamically
+  useEffect(() => {
+    const supabase = getSupabase();
+    
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      setUser(authUser);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -71,6 +92,21 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
+              {user ? (
+                <Link
+                  href="/profile"
+                  className={pathname === '/profile' ? 'active' : ''}
+                >
+                  Profile
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className={pathname === '/login' ? 'active' : ''}
+                >
+                  Login
+                </Link>
+              )}
             </div>
           </nav>
 

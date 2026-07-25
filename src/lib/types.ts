@@ -26,7 +26,15 @@ export interface BookingFormData {
 // ── Booking Result (from create_booking RPC) ──
 
 export type BookingResult =
-  | { success: true; bookingId: string; customerId: string; roomName: string }
+  | {
+      success: true;
+      bookingId: string;
+      customerId: string;
+      roomName: string;
+      paymentRequired?: boolean;
+      orderId?: string;
+      razorpayKeyId?: string;
+    }
   | { success: false; error: string };
 
 // ── Booking Context Data (passed to confirmation page) ──

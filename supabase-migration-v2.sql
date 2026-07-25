@@ -92,7 +92,7 @@ VALUES
 
 -- Seed site settings if empty
 INSERT INTO site_settings (gmap_link)
-SELECT 'https://maps.app.goo.gl/eB44R3aWd6G9p99h9'
+SELECT 'https://www.google.com/maps/search/?api=1&query=Hill+View+Lodge+Sringeri'
 WHERE NOT EXISTS (SELECT 1 FROM site_settings);
 
 -- ──────────────────────────────────────────────────────────────

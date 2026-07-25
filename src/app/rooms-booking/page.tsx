@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { fetchRooms, submitBooking } from '@/lib/api';
 import { useBooking } from '@/context/BookingContext';
 import type { Room, BookingFormData } from '@/lib/types';
+import { getSupabase } from '@/lib/supabaseClient';
+import { type User as AuthUser } from '@supabase/supabase-js';
 import {
   fadeUp,
   staggerContainer,
@@ -43,6 +46,9 @@ export default function RoomsBookingWizard() {
   const [roomsError, setRoomsError] = useState<string | null>(null);
 
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  
+  // Auth state
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   // Form Fields
   const [form, setForm] = useState<BookingFormData>({
@@ -60,6 +66,57 @@ export default function RoomsBookingWizard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Sync auth state & load profile details
+  useEffect(() => {
+    const supabase = getSupabase();
+    
+    supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
+      if (authUser) {
+        setUser(authUser);
+        
+        // Fetch matching profile
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authUser.id)
+          .single();
+          
+        if (profileData) {
+          setForm(prev => ({
+            ...prev,
+            customerName: profileData.full_name,
+            customerEmail: authUser.email || '',
+            phoneNumber: profileData.phone || '',
+          }));
+        }
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const activeUser = session?.user ?? null;
+      setUser(activeUser);
+      if (activeUser) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', activeUser.id)
+          .single();
+        if (profileData) {
+          setForm(prev => ({
+            ...prev,
+            customerName: profileData.full_name,
+            customerEmail: activeUser.email || '',
+            phoneNumber: profileData.phone || '',
+          }));
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   // Fetch Rooms
   useEffect(() => {
     async function loadRooms() {
@@ -73,6 +130,21 @@ export default function RoomsBookingWizard() {
       }
     }
     loadRooms();
+  }, []);
+
+  // Dynamically load Razorpay checkout script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      try {
+        document.body.removeChild(script);
+      } catch {
+        // ignore if already unmounted
+      }
+    };
   }, []);
 
   // Compute Day of Week
@@ -160,28 +232,114 @@ export default function RoomsBookingWizard() {
     setIsSubmitting(true);
     setSubmitError(null);
 
+    let paymentLaunched = false;
+
     try {
       const result = await submitBooking(form);
 
       if (result.success) {
-        setBookingData({
-          customerName: form.customerName,
-          customerEmail: form.customerEmail,
-          roomName: result.roomName,
-          numberOfPeople: form.numberOfPeople,
-          bookingId: result.bookingId,
-          checkInDate: form.checkInDate,
-        });
-        router.push('/rooms-booking/confirmation');
+        // If Razorpay payment integration is enabled and required
+        if (result.paymentRequired) {
+          paymentLaunched = true;
+          
+          const supabase = getSupabase();
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token || '';
+
+          const options = {
+            key: result.razorpayKeyId,
+            amount: Math.round(selectedRoom.price_per_night * 100), // paise
+            currency: 'INR',
+            name: 'Hill View Lodge',
+            description: selectedRoom.name,
+            order_id: result.orderId,
+            handler: async function (response: { razorpay_payment_id: string; razorpay_signature: string }) {
+              setIsSubmitting(true);
+              setSubmitError(null);
+              
+              try {
+                const verifyResponse = await fetch('/api/payments/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    orderId: result.orderId,
+                    paymentId: response.razorpay_payment_id,
+                    signature: response.razorpay_signature,
+                    bookingId: result.bookingId,
+                    token,
+                  }),
+                });
+
+                const verifyData = await verifyResponse.json();
+                
+                if (verifyData.success) {
+                  setBookingData({
+                    customerName: form.customerName,
+                    customerEmail: form.customerEmail,
+                    roomName: result.roomName,
+                    numberOfPeople: form.numberOfPeople,
+                    bookingId: result.bookingId,
+                    checkInDate: form.checkInDate,
+                  });
+                  router.push('/rooms-booking/confirmation');
+                } else {
+                  setSubmitError(verifyData.error || 'Payment signature verification failed.');
+                  setIsFormLocked(false);
+                }
+              } catch {
+                setSubmitError('Verification error. Please contact property care directly.');
+                setIsFormLocked(false);
+              } finally {
+                setIsSubmitting(false);
+              }
+            },
+            prefill: {
+              name: form.customerName,
+              email: form.customerEmail,
+              contact: form.phoneNumber,
+            },
+            theme: {
+              color: '#c8781f',
+            },
+          };
+
+          const RazorpayConstructor = (window as unknown as {
+            Razorpay: new (options: unknown) => {
+              open: () => void;
+              on: (event: string, callback: (res: { error: { description: string } }) => void) => void;
+            };
+          }).Razorpay;
+
+          const rzp = new RazorpayConstructor(options);
+          rzp.on('payment.failed', function (response: { error: { description: string } }) {
+            setSubmitError(response.error.description || 'Payment transaction failed.');
+            setIsFormLocked(false);
+          });
+          rzp.open();
+          setIsSubmitting(false);
+        } else {
+          // Standard confirmed booking (Deferred payment)
+          setBookingData({
+            customerName: form.customerName,
+            customerEmail: form.customerEmail,
+            roomName: result.roomName,
+            numberOfPeople: form.numberOfPeople,
+            bookingId: result.bookingId,
+            checkInDate: form.checkInDate,
+          });
+          router.push('/rooms-booking/confirmation');
+        }
       } else {
         setSubmitError(result.error || 'Failed to complete reservation. Please try again.');
-        setIsFormLocked(false); // unlock so user can edit
+        setIsFormLocked(false);
       }
     } catch {
       setSubmitError('Connection error. Please check your internet connection.');
       setIsFormLocked(false);
     } finally {
-      setIsSubmitting(false);
+      if (!paymentLaunched) {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -405,7 +563,54 @@ export default function RoomsBookingWizard() {
           )}
 
           {/* STEP 3: CUSTOMER DETAILS FORM */}
-          {step === 3 && selectedRoom && (
+          {step === 3 && selectedRoom && !user && (
+            <motion.div
+              key="step-3-auth"
+              variants={fadeUp}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0, y: -20 }}
+              className="bg-white rounded-3xl border border-black/5 shadow-sm p-8 sm:p-12 text-center space-y-6"
+            >
+              <div className="max-w-md mx-auto space-y-4">
+                <div className="w-16 h-16 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mx-auto">
+                  <User className="w-8 h-8" />
+                </div>
+                <h1 className="font-display italic text-2xl font-bold">Authentication Required</h1>
+                <p className="text-text-muted text-sm leading-relaxed">
+                  Please log in or create an account to proceed with your booking request. This helps us sync stays to your dashboard.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+                <Link
+                  href="/login"
+                  className="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-accent hover:bg-accent-hover text-white text-xs font-semibold rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer"
+                >
+                  Log In
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/signup"
+                  className="flex items-center justify-center gap-1.5 px-6 py-2.5 border border-black/5 text-xs text-text-muted hover:bg-black/5 transition-all cursor-pointer font-semibold rounded-full"
+                >
+                  Create Account
+                </Link>
+              </div>
+
+              <div className="pt-4 border-t border-black/5 flex justify-start">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-black/5 text-xs text-text-muted hover:bg-black/5 transition-all cursor-pointer font-semibold rounded-full"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && selectedRoom && user && (
             <motion.div
               key="step-3"
               variants={fadeUp}
