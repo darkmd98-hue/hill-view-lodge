@@ -355,6 +355,23 @@ export default function RoomsBookingWizard() {
               setIsSubmitting(true);
               setSubmitError(null);
               
+              // Get fresh auth token in case session expired during payment popup interaction
+              let freshToken = token;
+              try {
+                const currentSupabase = getSupabase();
+                const { data: { session: currentSession } } = await currentSupabase.auth.getSession();
+                if (currentSession?.access_token) {
+                  freshToken = currentSession.access_token;
+                } else {
+                  const { data: refreshData } = await currentSupabase.auth.refreshSession();
+                  if (refreshData.session?.access_token) {
+                    freshToken = refreshData.session.access_token;
+                  }
+                }
+              } catch (tokenErr) {
+                console.warn('Failed to refresh session token in payment handler:', tokenErr);
+              }
+
               try {
                 const verifyResponse = await fetch('/api/payments/verify', {
                   method: 'POST',
@@ -364,7 +381,7 @@ export default function RoomsBookingWizard() {
                     paymentId: response.razorpay_payment_id,
                     signature: response.razorpay_signature,
                     bookingId: result.bookingId,
-                    token,
+                    token: freshToken,
                   }),
                 });
 

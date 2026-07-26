@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
   try {
     const { orderId, paymentId, signature, bookingId, token } = await request.json();
 
-    if (!orderId || !paymentId || !signature || !bookingId || !token) {
-      return NextResponse.json({ success: false, error: 'Missing parameters.' }, { status: 400 });
+    if (!orderId || !paymentId || !signature || !bookingId) {
+      return NextResponse.json({ success: false, error: 'Missing required payment parameters.' }, { status: 400 });
     }
 
     const rzpSecret = process.env.RAZORPAY_KEY_SECRET;
@@ -28,24 +28,18 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 1. Verify User Auth Token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return NextResponse.json({ success: false, error: 'Authentication required.' }, { status: 401 });
-    }
-
-    // 2. Verify Razorpay Signature
+    // 1. Verify Razorpay Signature (Cryptographic proof of authorized payment)
     const expectedSignature = crypto
       .createHmac('sha256', rzpSecret)
       .update(`${orderId}|${paymentId}`)
       .digest('hex');
 
     if (expectedSignature !== signature) {
-      console.error('Razorpay signature mismatch.');
+      console.error('Razorpay signature mismatch:', { expectedSignature, signature });
       return NextResponse.json({ success: false, error: 'Payment verification signature mismatch.' }, { status: 400 });
     }
 
-    // 3. Update payment status to paid
+    // 2. Update payment status to paid
     const { error: paymentUpdateError } = await supabase
       .from('payments')
       .update({
@@ -56,10 +50,10 @@ export async function POST(request: NextRequest) {
       .eq('razorpay_order_id', orderId);
 
     if (paymentUpdateError) {
-      console.error('Failed to update payments table:', paymentUpdateError);
+      console.warn('Failed to update payments table status:', paymentUpdateError);
     }
 
-    // 4. Update booking status to confirmed
+    // 3. Update booking status to confirmed
     const { data: booking, error: bookingErr } = await supabase
       .from('bookings')
       .update({ status: 'confirmed' })
@@ -70,6 +64,28 @@ export async function POST(request: NextRequest) {
     if (bookingErr || !booking) {
       console.error('Failed to update booking status:', bookingErr);
       return NextResponse.json({ success: false, error: 'Failed to confirm booking record.' }, { status: 500 });
+    }
+
+    // 4. Resolve user email for transactional receipts (supports fallback if session token expired during OTP)
+    let userEmail: string | null = null;
+
+    if (token) {
+      const { data: { user: authUser } } = await supabase.auth.getUser(token);
+      if (authUser?.email) {
+        userEmail = authUser.email;
+      }
+    }
+
+    // Fallback: look up user by booking's user_id if token was missing or expired
+    if (!userEmail && booking.user_id) {
+      try {
+        const { data: adminUser } = await supabase.auth.admin.getUserById(booking.user_id);
+        if (adminUser?.user?.email) {
+          userEmail = adminUser.user.email;
+        }
+      } catch (err) {
+        console.warn('Fallback admin user lookup failed:', err);
+      }
     }
 
     // 5. Fetch Room details for email
@@ -93,12 +109,12 @@ export async function POST(request: NextRequest) {
       day: 'numeric',
     });
 
-    if (resend) {
+    if (resend && userEmail) {
       const emailPromises: Promise<unknown>[] = [];
 
       const isSandbox = fromEmail.includes('onboarding@resend.dev');
-      const recipient = isSandbox ? (ownerEmail || 'codeex97@gmail.com') : user.email!;
-      const subjectPrefix = isSandbox ? `[Sandbox for ${user.email}] ` : '';
+      const recipient = isSandbox ? (ownerEmail || 'codeex97@gmail.com') : userEmail;
+      const subjectPrefix = isSandbox ? `[Sandbox for ${userEmail}] ` : '';
 
       // Customer Email
       emailPromises.push(
@@ -163,7 +179,7 @@ export async function POST(request: NextRequest) {
                   <h2 style="color: #c8781f; margin-bottom: 16px;">💳 New Paid Booking Received</h2>
                   <table style="width: 100%; border-collapse: collapse;">
                     <tr><td style="padding: 8px 0; color: #6b7280;">Guest Name</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${booking.profiles?.full_name}</td></tr>
-                    <tr><td style="padding: 8px 0; color: #6b7280;">Email</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${user.email}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #6b7280;">Email</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${userEmail}</td></tr>
                     <tr><td style="padding: 8px 0; color: #6b7280;">Room Category</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${roomName}</td></tr>
                     <tr><td style="padding: 8px 0; color: #6b7280;">Check-in Date</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">${formattedDate}</td></tr>
                     <tr><td style="padding: 8px 0; color: #6b7280;">Amount Paid</td><td style="padding: 8px 0; text-align: right; font-weight: 600;">₹${booking.amount}</td></tr>
