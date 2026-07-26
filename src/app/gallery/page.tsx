@@ -21,8 +21,8 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtering & Lightbox States
-  const [activeCategory, setActiveCategory] = useState<string>('All');
+  // Filtering & Lightbox States (Default to Exterior)
+  const [activeCategory, setActiveCategory] = useState<string>('exterior');
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   // Dynamic fetch of folders and files from Supabase Storage
@@ -41,17 +41,31 @@ export default function GalleryPage() {
           throw new Error(rootError.message);
         }
 
-        // Find folders (in Supabase storage, folders don't have id/metadata)
+        // Find folders (filter out 'others' and system placeholders)
         let folders = rootItems
-          ? rootItems.filter(item => !item.id && !item.metadata).map(item => item.name)
+          ? rootItems
+              .filter(item => !item.id && !item.metadata)
+              .map(item => item.name)
+              .filter(name => name.toLowerCase() !== 'others')
           : [];
 
-        // Fallback to specced folders if root list doesn't yield folder structures
+        // Fallback to default categories if root list doesn't yield folder structures
         if (folders.length === 0) {
-          folders = ['rooms', 'exterior', 'surroundings', 'others'];
+          folders = ['exterior', 'rooms', 'surroundings'];
         }
 
+        // Sort folders in preferred order: Exterior, Rooms, Surrounding
+        const preferredOrder = ['exterior', 'rooms', 'surroundings', 'sorroundings', 'sorrounding'];
+        folders.sort((a, b) => {
+          const indexA = preferredOrder.indexOf(a.toLowerCase());
+          const indexB = preferredOrder.indexOf(b.toLowerCase());
+          return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+        });
+
         setCategories(folders);
+        if (folders.length > 0) {
+          setActiveCategory(folders[0]);
+        }
 
         const loadedMedia: MediaItem[] = [];
 
@@ -110,18 +124,19 @@ export default function GalleryPage() {
     loadGalleryData();
   }, []);
 
-  // Format category slugs (e.g., surroundings -> Surroundings)
+  // Format category slugs to display names (e.g. sorrounding/surroundings -> Surrounding)
   const formatCategoryName = (category: string) => {
+    const lower = category.toLowerCase();
+    if (lower === 'exterior') return 'Exterior';
+    if (lower === 'rooms') return 'Rooms';
+    if (lower === 'surroundings' || lower === 'sorroundings' || lower === 'sorrounding') return 'Surrounding';
     return category
       .replace(/[-_]/g, ' ')
       .replace(/\b\w/g, c => c.toUpperCase());
   };
 
   // Get currently filtered list of items in the grid
-  const filteredMedia = media.filter(item => {
-    if (activeCategory === 'All') return true;
-    return item.category === activeCategory;
-  });
+  const filteredMedia = media.filter(item => item.category === activeCategory);
 
   // Filters only photos for lightbox navigation
   const filteredPhotos = filteredMedia.filter(item => item.type === 'photo');
@@ -215,19 +230,6 @@ export default function GalleryPage() {
             
             {/* Category Filter Tabs */}
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                onClick={() => {
-                  setActiveCategory('All');
-                  setLightboxIndex(null);
-                }}
-                className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wider transition-all cursor-pointer border ${
-                  activeCategory === 'All'
-                    ? 'bg-accent border-accent text-white shadow-md'
-                    : 'bg-white border-black/5 text-text-muted hover:bg-[#f1eeeb]'
-                }`}
-              >
-                All
-              </button>
               {categories.map((cat) => (
                 <button
                   key={cat}
