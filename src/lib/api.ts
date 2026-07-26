@@ -60,6 +60,9 @@ export async function submitBooking(
       bookingId: data.bookingId,
       customerId: data.customerId ?? '',
       roomName: data.roomName,
+      paymentRequired: data.paymentRequired,
+      orderId: data.orderId,
+      razorpayKeyId: data.razorpayKeyId,
     };
   } catch (err) {
     console.error('Booking request failed:', err);
