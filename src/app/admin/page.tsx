@@ -60,9 +60,17 @@ interface Booking {
 
 
 
+interface RoomUnit {
+  id: string;
+  room_number: string;
+  status: string; // 'active' | 'out_of_service'
+  room_type_id: string;
+  rooms?: { name: string } | { name: string }[] | null;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'rooms' | 'staff' | 'bookings' | 'location'>('rooms');
+  const [activeTab, setActiveTab] = useState<'rooms' | 'staff' | 'bookings' | 'location' | 'units'>('rooms');
   
   // ── States ──
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -71,6 +79,12 @@ export default function AdminDashboard() {
   const [editPrice, setEditPrice] = useState<number | string>('');
   const [editTotalUnits, setEditTotalUnits] = useState<number | string>('');
   const [editAvailableUnits, setEditAvailableUnits] = useState<number | string>('');
+
+  const [units, setUnits] = useState<RoomUnit[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(true);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [newUnitNumber, setNewUnitNumber] = useState('');
+  const [newUnitCategoryId, setNewUnitCategoryId] = useState('');
 
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -171,13 +185,113 @@ export default function AdminDashboard() {
     }
   }, [triggerNotification]);
 
+  const loadUnits = useCallback(async () => {
+    setUnitsLoading(true);
+    try {
+      const response = await fetch('/api/admin/room-units');
+      const data = await response.json();
+      if (response.ok) {
+        setUnits(data);
+      } else {
+        triggerNotification(data.error || 'Failed to fetch room units', 'error');
+      }
+    } catch {
+      triggerNotification('Failed to connect to room units service', 'error');
+    } finally {
+      setUnitsLoading(false);
+    }
+  }, [triggerNotification]);
+
   // Load active tab data
   useEffect(() => {
     if (activeTab === 'rooms') loadRooms();
     else if (activeTab === 'staff') loadStaff();
     else if (activeTab === 'bookings') loadBookings();
     else if (activeTab === 'location') loadSettings();
-  }, [activeTab, loadRooms, loadStaff, loadBookings, loadSettings]);
+    else if (activeTab === 'units') {
+      loadRooms();
+      loadUnits();
+    }
+  }, [activeTab, loadRooms, loadStaff, loadBookings, loadSettings, loadUnits]);
+
+  // Room Units Add
+  const handleAddUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUnitNumber.trim() || !newUnitCategoryId) {
+      triggerNotification('Room number and category selection are required.', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/room-units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomTypeId: newUnitCategoryId,
+          roomNumber: newUnitNumber.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        triggerNotification('Room unit added successfully.', 'success');
+        setNewUnitNumber('');
+        loadUnits();
+      } else {
+        triggerNotification(data.error || 'Failed to add room unit.', 'error');
+      }
+    } catch {
+      triggerNotification('Connection error while adding room unit.', 'error');
+    }
+  };
+
+  // Toggle Room Unit status (active / out_of_service)
+  const handleToggleUnitStatus = async (unitId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'active' ? 'out_of_service' : 'active';
+    try {
+      const response = await fetch('/api/admin/room-units', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: unitId,
+          status: nextStatus,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        triggerNotification(
+          `Room unit status updated successfully.`,
+          'success'
+        );
+        loadUnits();
+      } else {
+        triggerNotification(data.error || 'Failed to update unit service status.', 'error');
+      }
+    } catch {
+      triggerNotification('Connection error while updating unit status.', 'error');
+    }
+  };
+
+  // Room Unit Delete
+  const handleDeleteUnit = async (unitId: string) => {
+    if (!confirm('Are you sure you want to delete this room unit? This could affect existing reservations linked to this unit.')) return;
+
+    try {
+      const response = await fetch(`/api/admin/room-units?id=${unitId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        triggerNotification('Room unit deleted successfully.', 'success');
+        loadUnits();
+      } else {
+        triggerNotification(data.error || 'Failed to delete room unit.', 'error');
+      }
+    } catch {
+      triggerNotification('Connection error while deleting room unit.', 'error');
+    }
+  };
 
   // ── Handlers ──
 
@@ -416,6 +530,15 @@ export default function AdminDashboard() {
             Room Pricing
           </button>
           <button
+            onClick={() => setActiveTab('units')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+              activeTab === 'units' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
+            }`}
+          >
+            <Mountain className="w-4.5 h-4.5 text-orange-500" />
+            Room Units
+          </button>
+          <button
             onClick={() => setActiveTab('staff')}
             className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
               activeTab === 'staff' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
@@ -554,6 +677,139 @@ export default function AdminDashboard() {
                             </tr>
                           );
                         })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* TAB: ROOM UNITS */}
+          {activeTab === 'units' && (
+            <motion.div variants={fadeUp} initial="hidden" animate="visible" className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="font-display italic text-3xl font-bold text-text-primary">Room Units</h1>
+                  <p className="text-text-muted text-sm mt-1">Add specific room numbers to categories and manage service status.</p>
+                </div>
+              </div>
+
+              {/* Add Room Unit Form */}
+              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
+                <h2 className="font-bold text-text-primary text-base">Add New Room Unit</h2>
+                <form onSubmit={handleAddUnit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-text-primary">Room Category *</label>
+                    <select
+                      value={newUnitCategoryId}
+                      onChange={(e) => setNewUnitCategoryId(e.target.value)}
+                      className="form-input text-sm bg-white"
+                      required
+                    >
+                      <option value="">-- Choose Category --</option>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>{room.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-text-primary">Room Number / Name *</label>
+                    <input
+                      type="text"
+                      value={newUnitNumber}
+                      onChange={(e) => setNewUnitNumber(e.target.value)}
+                      placeholder="e.g. Room 101"
+                      className="form-input text-sm"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer h-10 w-full sm:w-auto self-end md:justify-self-start font-body"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Unit
+                  </button>
+                </form>
+              </div>
+
+              {/* Category Filter selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">Filter Category:</span>
+                <select
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  className="form-input w-64 text-sm bg-white py-1.5 px-3"
+                >
+                  <option value="all">All Categories</option>
+                  {rooms.map((room) => (
+                    <option key={room.id} value={room.id}>{room.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Units Table */}
+              {unitsLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-black/5 overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm font-body">
+                      <thead>
+                        <tr className="bg-surface text-text-muted font-medium border-b border-black/5">
+                          <th className="py-4 px-6">Room Number / Name</th>
+                          <th className="py-4 px-6">Category</th>
+                          <th className="py-4 px-6 text-center">Service Status</th>
+                          <th className="py-4 px-6 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-black/5">
+                        {units
+                          .filter((u) => selectedCategoryFilter === 'all' || u.room_type_id === selectedCategoryFilter)
+                          .map((unit) => (
+                            <tr key={unit.id} className="hover:bg-[#fafaf9] transition-colors">
+                              <td className="py-4 px-6 font-semibold text-text-primary">{unit.room_number}</td>
+                              <td className="py-4 px-6 text-text-muted">{Array.isArray(unit.rooms) ? unit.rooms[0]?.name : (unit.rooms as { name: string })?.name || 'Unknown Category'}</td>
+                              <td className="py-4 px-6 text-center">
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                  unit.status !== 'out_of_service' ? 'bg-green-50 text-green-700' : 'bg-rose-50 text-rose-700'
+                                }`}>
+                                  {unit.status !== 'out_of_service' ? 'Active' : 'Out of Service'}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex items-center justify-center gap-3">
+                                  <button
+                                    onClick={() => handleToggleUnitStatus(unit.id, unit.status || 'active')}
+                                    className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all cursor-pointer ${
+                                      unit.status !== 'out_of_service'
+                                        ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-700 hover:text-white'
+                                        : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-700 hover:text-white'
+                                    }`}
+                                  >
+                                    {unit.status !== 'out_of_service' ? 'Set Out of Service' : 'Set Active'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteUnit(unit.id)}
+                                    className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete Room Unit"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        {units.filter((u) => selectedCategoryFilter === 'all' || u.room_type_id === selectedCategoryFilter).length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="py-8 text-center text-text-muted text-sm italic">
+                              No room units found for this category selection.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

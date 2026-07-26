@@ -8,8 +8,12 @@ CREATE TABLE IF NOT EXISTS public.room_units (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   room_type_id UUID REFERENCES public.rooms(id) ON DELETE CASCADE NOT NULL,
   room_number  TEXT NOT NULL,
+  status       TEXT DEFAULT 'active',
   created_at   TIMESTAMPTZ DEFAULT now()
 );
+
+-- Ensure status column exists if the table was already created without it
+ALTER TABLE public.room_units ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 
 -- Enable RLS on room_units
 ALTER TABLE public.room_units ENABLE ROW LEVEL SECURITY;

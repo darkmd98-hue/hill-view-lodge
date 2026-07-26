@@ -55,6 +55,7 @@ export default function RoomsBookingWizard() {
   const [roomUnits, setRoomUnits] = useState<{ id: string; room_number: string; isOccupied: boolean }[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
   const [unitsError, setUnitsError] = useState<string | null>(null);
+  const [allRoomUnits, setAllRoomUnits] = useState<{ id: string; room_number: string; room_type_id: string; status?: string }[]>([]);
 
   // Form Fields
   const [form, setForm] = useState<BookingFormData>({
@@ -143,6 +144,31 @@ export default function RoomsBookingWizard() {
       }
     }
     loadRooms();
+  }, []);
+
+  // Fetch all room units for card display (fallback checks included)
+  useEffect(() => {
+    const supabase = getSupabase();
+    supabase
+      .from('room_units')
+      .select('id, room_number, room_type_id, status')
+      .order('room_number', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          // Fallback if status doesn't exist
+          supabase
+            .from('room_units')
+            .select('id, room_number, room_type_id')
+            .order('room_number', { ascending: true })
+            .then(({ data: fallbackData }) => {
+              if (fallbackData) {
+                setAllRoomUnits(fallbackData.map(u => ({ ...u, status: 'active' })));
+              }
+            });
+        } else if (data) {
+          setAllRoomUnits(data);
+        }
+      });
   }, []);
 
   // Load available units when date or category changes
@@ -487,7 +513,7 @@ export default function RoomsBookingWizard() {
                           className="object-cover"
                           sizes="(max-width: 768px) 100vw, 33vw"
                         />
-                        {room.available_units <= 0 && (
+                        {!allRoomUnits.some((u) => u.room_type_id === room.id && u.status !== 'out_of_service') && (
                           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white font-semibold uppercase tracking-wider text-xs">
                             Sold Out
                           </div>
@@ -495,44 +521,82 @@ export default function RoomsBookingWizard() {
                       </div>
 
                       <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="inline-block text-[10px] uppercase font-bold tracking-widest bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
-                              {room.occupancy_info || '2 Adults, 1 Child'}
-                            </span>
-                            <span className="text-xs text-text-muted">
-                              {room.available_units} left
-                            </span>
-                          </div>
-                          <h2 className="font-display italic text-xl font-bold text-text-primary leading-tight">
-                            {room.name}
-                          </h2>
-                          <p className="text-text-muted text-xs line-clamp-2 leading-relaxed">
-                            {room.description || 'Experience comfort and stunning valley coordinates at Hill View.'}
-                          </p>
-                        </div>
+                        {(() => {
+                          const activeUnits = allRoomUnits.filter(
+                            (u) => u.room_type_id === room.id && u.status !== 'out_of_service'
+                          );
+                          return (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="inline-block text-[10px] uppercase font-bold tracking-widest bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
+                                  {room.occupancy_info || '2 Adults, 1 Child'}
+                                </span>
+                                <span className="text-xs text-text-muted">
+                                  {activeUnits.length} rooms left
+                                </span>
+                              </div>
+                              <div>
+                                <h2 className="font-display italic text-xl font-bold text-text-primary leading-tight">
+                                  {room.name}
+                                </h2>
+                                <p className="text-text-muted text-xs line-clamp-2 leading-relaxed mt-1">
+                                  {room.description || 'Experience comfort and stunning valley coordinates at Hill View.'}
+                                </p>
+                              </div>
+
+                              <div className="pt-1.5 space-y-1">
+                                <span className="text-[9px] text-text-muted uppercase tracking-wider block font-semibold">Available Rooms:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {activeUnits.map((u) => {
+                                    const roomNumOnly = u.room_number.includes(' - Room ')
+                                      ? u.room_number.split(' - Room ')[1]
+                                      : u.room_number;
+                                    return (
+                                      <span
+                                        key={u.id}
+                                        className="text-[9px] bg-[#f7f4ef] border border-black/5 text-text-muted px-2 py-0.5 rounded-md font-semibold font-mono"
+                                      >
+                                        Room {roomNumOnly}
+                                      </span>
+                                    );
+                                  })}
+                                  {activeUnits.length === 0 && (
+                                    <span className="text-[10px] italic text-rose-600">No rooms active</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div className="flex items-center justify-between pt-3 border-t border-black/5">
                           <div>
                             <span className="text-[10px] text-text-muted block uppercase tracking-wider">Per Night</span>
                             <span className="font-semibold text-text-primary">{formatPrice(room.price_per_night)}</span>
                           </div>
-                          <button
-                            disabled={room.available_units <= 0}
-                            onClick={() => {
-                              setSelectedRoom(room);
-                              setForm((prev) => ({ ...prev, selectedRoom: room.id }));
-                              setStep(2);
-                            }}
-                            className={`flex items-center gap-1 text-xs font-semibold px-4 py-2 rounded-full border transition-all cursor-pointer ${
-                              room.available_units <= 0
-                                ? 'border-black/5 bg-gray-50 text-text-muted cursor-not-allowed'
-                                : 'border-accent/30 bg-accent/5 text-accent hover:bg-accent hover:text-white shadow-sm'
-                            }`}
-                          >
-                            Select
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                          {(() => {
+                            const hasActiveRooms = allRoomUnits.some(
+                              (u) => u.room_type_id === room.id && u.status !== 'out_of_service'
+                            );
+                            return (
+                              <button
+                                disabled={!hasActiveRooms}
+                                onClick={() => {
+                                  setSelectedRoom(room);
+                                  setForm((prev) => ({ ...prev, selectedRoom: room.id }));
+                                  setStep(2);
+                                }}
+                                className={`flex items-center gap-1 text-xs font-semibold px-4 py-2 rounded-full border transition-all cursor-pointer ${
+                                  !hasActiveRooms
+                                    ? 'border-black/5 bg-gray-50 text-text-muted cursor-not-allowed'
+                                    : 'border-accent/30 bg-accent/5 text-accent hover:bg-accent hover:text-white shadow-sm'
+                                }`}
+                              >
+                                Select
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </motion.div>

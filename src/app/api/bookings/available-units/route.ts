@@ -18,15 +18,39 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     // 1. Fetch all room units for this room type category
-    const { data: units, error: unitsError } = await supabase
+    let units: { id: string; room_number: string; status?: string }[] = [];
+    let fetchError = null;
+
+    const { data: dataWithStatus, error: errWithStatus } = await supabase
       .from('room_units')
-      .select('id, room_number')
+      .select('id, room_number, status')
       .eq('room_type_id', roomId)
       .order('room_number', { ascending: true });
 
-    if (unitsError) {
-      console.error('Failed to fetch room units:', unitsError);
-      return NextResponse.json({ error: unitsError.message }, { status: 500 });
+    if (errWithStatus) {
+      if (errWithStatus.message.includes('status') || errWithStatus.message.includes('column')) {
+        // Fallback if status column doesn't exist yet in target database schema cache
+        const { data: dataWithoutStatus, error: errWithoutStatus } = await supabase
+          .from('room_units')
+          .select('id, room_number')
+          .eq('room_type_id', roomId)
+          .order('room_number', { ascending: true });
+        
+        if (errWithoutStatus) {
+          fetchError = errWithoutStatus;
+        } else {
+          units = (dataWithoutStatus || []).map(u => ({ ...u, status: 'active' }));
+        }
+      } else {
+        fetchError = errWithStatus;
+      }
+    } else {
+      units = dataWithStatus || [];
+    }
+
+    if (fetchError) {
+      console.error('Failed to fetch room units:', fetchError);
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
     }
 
     // 2. Fetch all active bookings for this date and room category
@@ -47,7 +71,7 @@ export async function GET(request: NextRequest) {
     const mapped = (units || []).map((u) => ({
       id: u.id,
       room_number: u.room_number,
-      isOccupied: bookedUnitIds.has(u.id),
+      isOccupied: bookedUnitIds.has(u.id) || u.status === 'out_of_service' || u.status === 'maintenance',
     }));
 
     return NextResponse.json(mapped);
