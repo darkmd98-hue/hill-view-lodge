@@ -1,4 +1,7 @@
 -- Migration v5: Database Cleanup and Seeding
+-- Ensure status column exists on room_units
+ALTER TABLE public.room_units ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+
 -- 1. Create temporary references or variables for cleanup
 DO $$
 DECLARE
