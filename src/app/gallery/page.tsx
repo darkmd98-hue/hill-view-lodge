@@ -296,11 +296,6 @@ export default function GalleryPage() {
                         </div>
                       </div>
                     )}
-
-                    {/* Simple Bottom Description */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pointer-events-none">
-                      <p className="text-white text-xs font-semibold truncate">{item.title}</p>
-                    </div>
                   </motion.div>
                 ))}
               </div>
@@ -358,12 +353,9 @@ export default function GalleryPage() {
                 />
               </div>
 
-              {/* Title descriptions */}
+              {/* Image counter */}
               <div className="text-center mt-4">
-                <h3 className="text-white text-sm font-semibold tracking-wide">
-                  {filteredPhotos[lightboxIndex].title}
-                </h3>
-                <span className="text-[10px] text-white/50 font-mono mt-1 block">
+                <span className="text-xs text-white/70 font-mono block">
                   Image {lightboxIndex + 1} of {filteredPhotos.length}
                 </span>
               </div>
