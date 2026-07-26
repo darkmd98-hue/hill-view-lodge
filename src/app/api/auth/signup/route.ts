@@ -34,6 +34,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
+    // 1b. Check if phone number is already associated with another account
+    const cleanPhone = phone.trim();
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, phone')
+      .eq('phone', cleanPhone)
+      .maybeSingle();
+
+    if (existingProfile) {
+      return NextResponse.json(
+        { error: 'This phone number is already registered with a different account.' },
+        { status: 400 }
+      );
+    }
+
     // 2. Create the Auth User in Supabase
     // Note: In local/dev environments, email verification is enabled by default.
     // If you want auto-confirm, set email_confirm: true. We use email_confirm: true 

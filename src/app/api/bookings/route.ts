@@ -6,7 +6,12 @@ import Razorpay from 'razorpay';
 interface BookingRequest {
   customerName: string;
   phoneNumber: string;
+  alternatePhoneNumber?: string;
   address: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
   selectedRoom: string; // room UUID
   customerEmail: string;
   checkInDate: string; // YYYY-MM-DD
@@ -23,7 +28,6 @@ export async function POST(request: NextRequest) {
     if (
       !body.customerName ||
       !body.phoneNumber ||
-      !body.address ||
       !body.selectedRoom ||
       !body.customerEmail ||
       !body.checkInDate ||
@@ -122,18 +126,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const constructedAddress = body.address || `${body.streetAddress || ''}, ${body.city || ''}, ${body.state || ''} - ${body.pincode || ''}`;
+
     // Create Booking under 'pending' status
+    const insertPayload: Record<string, unknown> = {
+      user_id: user.id,
+      service_type: 'room',
+      room_or_activity_id: room.id,
+      check_in: body.checkInDate,
+      amount: room.price_per_night,
+      status: 'pending',
+      room_unit_id: body.roomUnitId,
+      address: constructedAddress,
+    };
+
+    if (body.alternatePhoneNumber) insertPayload.alternate_phone = body.alternatePhoneNumber;
+    if (body.streetAddress) insertPayload.street_address = body.streetAddress;
+    if (body.city) insertPayload.city = body.city;
+    if (body.state) insertPayload.state = body.state;
+    if (body.pincode) insertPayload.pincode = body.pincode;
+
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
-      .insert({
-        user_id: user.id,
-        service_type: 'room',
-        room_or_activity_id: room.id,
-        check_in: body.checkInDate,
-        amount: room.price_per_night,
-        status: 'pending',
-        room_unit_id: body.roomUnitId,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 

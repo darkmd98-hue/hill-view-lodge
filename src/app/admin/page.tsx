@@ -43,13 +43,21 @@ interface Staff {
 
 interface Booking {
   id: string;
-  number_of_people: number;
   status: string;
   check_in_date: string;
   created_at: string;
+  amount?: number;
+  address?: string;
+  alternate_phone?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  room_number?: string;
   profiles: {
     full_name: string;
     phone: string;
+    alternate_phone?: string;
     email: string;
   } | null;
   rooms: {
@@ -57,8 +65,6 @@ interface Booking {
     price_per_night: number;
   } | null;
 }
-
-
 
 interface RoomUnit {
   id: string;
@@ -79,6 +85,18 @@ export default function AdminDashboard() {
   const [editPrice, setEditPrice] = useState<number | string>('');
   const [editTotalUnits, setEditTotalUnits] = useState<number | string>('');
   const [editAvailableUnits, setEditAvailableUnits] = useState<number | string>('');
+
+  // New Category Creation state
+  const [isNewCategoryOpen, setIsNewCategoryOpen] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({
+    name: '',
+    description: '',
+    price_per_night: '',
+    occupancy_info: '2 Adults, 1 Child',
+    thumbnail_image_url: '/images/hero-interior.png',
+    initial_units_count: '5',
+  });
+  const [newCategoryLoading, setNewCategoryLoading] = useState(false);
 
   const [units, setUnits] = useState<RoomUnit[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(true);
@@ -101,6 +119,11 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsSearch, setBookingsSearch] = useState('');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all');
+  const [bookingSortOrder, setBookingSortOrder] = useState<'latest' | 'oldest'>('latest');
+
+  // Delete Booking state
+  const [deletingBookingId, setDeletingBookingId] = useState<string | null>(null);
 
   // Site settings state
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -408,6 +431,95 @@ export default function AdminDashboard() {
     }
   };
 
+  // Create Brand New Room Category
+  const handleCreateRoomCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategoryForm.name.trim() || !newCategoryForm.price_per_night) return;
+
+    setNewCategoryLoading(true);
+    try {
+      const response = await fetch('/api/admin/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCategoryForm),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        triggerNotification(`Room category "${newCategoryForm.name}" created successfully.`, 'success');
+        setIsNewCategoryOpen(false);
+        setNewCategoryForm({
+          name: '',
+          description: '',
+          price_per_night: '',
+          occupancy_info: '2 Adults, 1 Child',
+          thumbnail_image_url: '/images/hero-interior.png',
+          initial_units_count: '5',
+        });
+        loadRooms();
+        loadUnits();
+      } else {
+        triggerNotification(data.error || 'Failed to create room category.', 'error');
+      }
+    } catch {
+      triggerNotification('Connection error while creating category.', 'error');
+    } finally {
+      setNewCategoryLoading(false);
+    }
+  };
+
+  // Export Staff Registry to Excel (.xlsx)
+  const handleExportStaff = () => {
+    if (staff.length === 0) return;
+    const exportData = staff.map((s) => ({
+      'Employee Name': s.name,
+      'Role / Position': s.role,
+      'Phone Number': s.phone,
+      'Email Address': s.email || 'N/A',
+      'Joined Date': s.joined_date ? new Date(s.joined_date).toLocaleDateString() : 'N/A',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Staff Registry');
+
+    const maxLen = exportData.reduce((acc: Record<string, number>, row: Record<string, string | number>) => {
+      Object.keys(row).forEach((key) => {
+        const valLen = String(row[key] || '').length;
+        acc[key] = Math.max(acc[key] || key.length, valLen);
+      });
+      return acc;
+    }, {});
+    worksheet['!cols'] = Object.keys(maxLen).map((key) => ({ wch: maxLen[key] + 3 }));
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(workbook, `hill-view-staff-${dateStr}.xlsx`);
+    triggerNotification('Staff registry exported to Excel successfully.', 'success');
+  };
+
+  // Delete Customer Booking Permanently
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this customer booking record?')) return;
+
+    setDeletingBookingId(bookingId);
+    try {
+      const response = await fetch(`/api/admin/bookings?id=${bookingId}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (response.ok) {
+        triggerNotification('Booking record deleted permanently.', 'success');
+        loadBookings();
+      } else {
+        triggerNotification(data.error || 'Failed to delete booking record.', 'error');
+      }
+    } catch {
+      triggerNotification('Connection error while deleting booking.', 'error');
+    } finally {
+      setDeletingBookingId(null);
+    }
+  };
+
   // Google Maps link save
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -431,25 +543,51 @@ export default function AdminDashboard() {
     }
   };
 
-  // Filtered Bookings
-  const filteredBookings = bookings.filter((b) => {
-    const search = bookingsSearch.toLowerCase();
-    const guestName = b.profiles?.full_name?.toLowerCase() || '';
-    const guestPhone = b.profiles?.phone?.toLowerCase() || '';
-    return guestName.includes(search) || guestPhone.includes(search);
-  });
+  // Filtered & Sorted Bookings
+  const filteredBookings = bookings
+    .filter((b) => {
+      const search = bookingsSearch.toLowerCase();
+      const guestName = b.profiles?.full_name?.toLowerCase() || '';
+      const guestPhone = b.profiles?.phone?.toLowerCase() || '';
+      const altPhone = b.alternate_phone?.toLowerCase() || b.profiles?.alternate_phone?.toLowerCase() || '';
+      const guestEmail = b.profiles?.email?.toLowerCase() || '';
+      const bookingId = b.id.toLowerCase();
+
+      const matchesSearch =
+        guestName.includes(search) ||
+        guestPhone.includes(search) ||
+        altPhone.includes(search) ||
+        guestEmail.includes(search) ||
+        bookingId.includes(search);
+
+      const matchesStatus = bookingStatusFilter === 'all' || b.status === bookingStatusFilter;
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.created_at || a.check_in_date).getTime();
+      const dateB = new Date(b.created_at || b.check_in_date).getTime();
+      return bookingSortOrder === 'latest' ? dateB - dateA : dateA - dateB;
+    });
 
   // Export Bookings to Excel SheetJS
   const handleExportBookings = () => {
     const exportData = filteredBookings.map((b) => ({
       'Booking ID': b.id.slice(0, 8).toUpperCase(),
       'Guest Name': b.profiles?.full_name || 'N/A',
-      'Phone Number': b.profiles?.phone || 'N/A',
+      'Primary Phone': b.profiles?.phone || 'N/A',
+      'Alternate Phone': b.alternate_phone || b.profiles?.alternate_phone || 'N/A',
       'Email Address': b.profiles?.email || 'N/A',
       'Room Reserved': b.rooms?.name || 'N/A',
-      'Guests Count': b.number_of_people,
+      'Room Number': b.room_number || 'N/A',
       'Check-in Date': b.check_in_date,
+      'Amount Paid (INR)': b.amount || b.rooms?.price_per_night || 0,
       'Booking Status': b.status,
+      'Full Address': b.address || 'N/A',
+      'Street Details': b.street_address || 'N/A',
+      'City': b.city || 'N/A',
+      'State': b.state || 'N/A',
+      'Pincode': b.pincode || 'N/A',
       'Reserved On': new Date(b.created_at).toLocaleDateString(),
     }));
 
@@ -578,7 +716,114 @@ export default function AdminDashboard() {
                   <h1 className="font-display italic text-3xl font-bold text-text-primary">Room Pricing & Status</h1>
                   <p className="text-text-muted text-sm mt-1">Configure room prices and check availability slots.</p>
                 </div>
+                <button
+                  onClick={() => setIsNewCategoryOpen(true)}
+                  className="flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Room Category
+                </button>
               </div>
+
+              {/* Create New Room Category Modal / Form */}
+              <AnimatePresence>
+                {isNewCategoryOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm overflow-hidden space-y-4"
+                  >
+                    <div className="flex items-center justify-between pb-3 border-b border-black/5">
+                      <h2 className="font-bold text-text-primary text-lg">Create New Room Category</h2>
+                      <button
+                        onClick={() => setIsNewCategoryOpen(false)}
+                        className="text-text-muted hover:text-text-primary cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCreateRoomCategory} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-text-primary">Category Name *</label>
+                        <input
+                          type="text"
+                          value={newCategoryForm.name}
+                          onChange={(e) => setNewCategoryForm({ ...newCategoryForm, name: e.target.value })}
+                          placeholder="e.g. Deluxe Balcony Suite"
+                          className="form-input py-2 text-sm"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-text-primary">Price per Night (₹) *</label>
+                        <input
+                          type="number"
+                          value={newCategoryForm.price_per_night}
+                          onChange={(e) => setNewCategoryForm({ ...newCategoryForm, price_per_night: e.target.value })}
+                          placeholder="e.g. 3500"
+                          className="form-input py-2 text-sm"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-text-primary">Occupancy Info</label>
+                        <input
+                          type="text"
+                          value={newCategoryForm.occupancy_info}
+                          onChange={(e) => setNewCategoryForm({ ...newCategoryForm, occupancy_info: e.target.value })}
+                          placeholder="e.g. 2 Adults, 1 Child"
+                          className="form-input py-2 text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-1 md:col-span-2">
+                        <label className="text-xs font-semibold text-text-primary">Description</label>
+                        <input
+                          type="text"
+                          value={newCategoryForm.description}
+                          onChange={(e) => setNewCategoryForm({ ...newCategoryForm, description: e.target.value })}
+                          placeholder="Brief summary of amenities and layout"
+                          className="form-input py-2 text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-text-primary">Initial Units Count</label>
+                        <input
+                          type="number"
+                          value={newCategoryForm.initial_units_count}
+                          onChange={(e) => setNewCategoryForm({ ...newCategoryForm, initial_units_count: e.target.value })}
+                          placeholder="e.g. 5"
+                          className="form-input py-2 text-sm"
+                          min={1}
+                        />
+                      </div>
+
+                      <div className="md:col-span-3 flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsNewCategoryOpen(false)}
+                          className="px-4 py-2 border border-black/5 rounded-full text-sm text-text-muted hover:bg-black/5 transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={newCategoryLoading}
+                          className="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-full text-sm font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          {newCategoryLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Save & Seed Units
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {roomsLoading ? (
                 <div className="flex justify-center py-12">
@@ -600,6 +845,14 @@ export default function AdminDashboard() {
                       <tbody className="divide-y divide-black/5">
                         {rooms.map((room) => {
                           const isEditing = editingRoomId === room.id;
+                          const categoryUnits = units.filter((u) => u.room_type_id === room.id);
+                          const activeUnitsCount = categoryUnits.length > 0
+                            ? categoryUnits.filter((u) => u.status !== 'out_of_service').length
+                            : (room.available_units || 0);
+                          const totalUnitsCount = categoryUnits.length > 0
+                            ? categoryUnits.length
+                            : (room.total_units || 5);
+
                           return (
                             <tr key={room.id} className="hover:bg-[#fafaf9] transition-colors">
                               <td className="py-4 px-6 font-semibold text-text-primary">{room.name}</td>
@@ -615,7 +868,7 @@ export default function AdminDashboard() {
                                   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(room.price_per_night)
                                 )}
                               </td>
-                              <td className="py-4 px-6 text-center">
+                              <td className="py-4 px-6 text-center font-semibold text-text-primary">
                                 {isEditing ? (
                                   <input
                                     type="number"
@@ -624,7 +877,7 @@ export default function AdminDashboard() {
                                     className="form-input text-center w-20 inline-block px-2.5 py-1 text-sm"
                                   />
                                 ) : (
-                                  room.total_units
+                                  totalUnitsCount
                                 )}
                               </td>
                               <td className="py-4 px-6 text-center">
@@ -636,8 +889,8 @@ export default function AdminDashboard() {
                                     className="form-input text-center w-20 inline-block px-2.5 py-1 text-sm"
                                   />
                                 ) : (
-                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${room.available_units > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                                    {room.available_units} / {room.total_units} Left
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${activeUnitsCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                    {activeUnitsCount} / {totalUnitsCount} Left
                                   </span>
                                 )}
                               </td>
@@ -827,23 +1080,37 @@ export default function AdminDashboard() {
                   <p className="text-text-muted text-sm mt-1">Manage employees and register roles.</p>
                 </div>
                 {!isStaffFormOpen && (
-                  <button
-                    onClick={() => {
-                      setStaffForm({
-                        id: '',
-                        name: '',
-                        role: 'Manager',
-                        phone: '',
-                        email: '',
-                        joined_date: '',
-                      });
-                      setIsStaffFormOpen(true);
-                    }}
-                    className="flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Staff
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleExportStaff}
+                      disabled={staff.length === 0}
+                      className={`flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-full transition-all border ${
+                        staff.length === 0
+                          ? 'border-black/5 bg-gray-50 text-text-muted cursor-not-allowed'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-sm'
+                      }`}
+                    >
+                      <Download className="w-4 h-4" />
+                      Export Staff (.xlsx)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setStaffForm({
+                          id: '',
+                          name: '',
+                          role: 'Manager',
+                          phone: '',
+                          email: '',
+                          joined_date: '',
+                        });
+                        setIsStaffFormOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Staff
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1031,16 +1298,46 @@ export default function AdminDashboard() {
                 </button>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative max-w-md">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                <input
-                  type="text"
-                  placeholder="Search by customer name or phone..."
-                  value={bookingsSearch}
-                  onChange={(e) => setBookingsSearch(e.target.value)}
-                  className="form-input pl-10 py-2.5 text-sm w-full"
-                />
+              {/* Search, Status Filter & Sorting Toolbar */}
+              <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search guest name, phone, email, or booking ID..."
+                    value={bookingsSearch}
+                    onChange={(e) => setBookingsSearch(e.target.value)}
+                    className="form-input pl-10 py-2 text-sm w-full"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-text-muted uppercase">Status:</span>
+                    <select
+                      value={bookingStatusFilter}
+                      onChange={(e) => setBookingStatusFilter(e.target.value)}
+                      className="form-input text-xs py-1.5 px-3 bg-white"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="pending">Pending</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-text-muted uppercase">Sort:</span>
+                    <select
+                      value={bookingSortOrder}
+                      onChange={(e) => setBookingSortOrder(e.target.value as 'latest' | 'oldest')}
+                      className="form-input text-xs py-1.5 px-3 bg-white"
+                    >
+                      <option value="latest">Latest First</option>
+                      <option value="oldest">Oldest First</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {bookingsLoading ? (
@@ -1055,17 +1352,19 @@ export default function AdminDashboard() {
                         <tr className="bg-surface text-text-muted font-medium border-b border-black/5">
                           <th className="py-4 px-6">Booking ID</th>
                           <th className="py-4 px-6">Guest Info</th>
-                          <th className="py-4 px-6">Room Details</th>
+                          <th className="py-4 px-6">Contact & Address</th>
+                          <th className="py-4 px-6">Room & Unit</th>
                           <th className="py-4 px-6 text-center">Check-In Date</th>
                           <th className="py-4 px-6 text-center">Status</th>
                           <th className="py-4 px-6 text-center">Reserved On</th>
+                          <th className="py-4 px-6 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black/5">
                         {filteredBookings.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-8 px-6 text-center text-text-muted italic">
-                              No bookings match your search filters.
+                            <td colSpan={8} className="py-8 px-6 text-center text-text-muted italic">
+                              No bookings match your search and filter criteria.
                             </td>
                           </tr>
                         ) : (
@@ -1076,12 +1375,22 @@ export default function AdminDashboard() {
                               </td>
                               <td className="py-4 px-6 space-y-0.5">
                                 <div className="font-semibold text-text-primary">{b.profiles?.full_name || 'N/A'}</div>
-                                <div className="text-xs text-text-muted font-mono">{b.profiles?.phone}</div>
                                 <div className="text-xs text-text-muted font-mono">{b.profiles?.email}</div>
+                              </td>
+                              <td className="py-4 px-6 space-y-1 text-xs">
+                                <div><span className="text-text-muted">Primary Phone:</span> <span className="font-mono font-semibold">{b.profiles?.phone || '—'}</span></div>
+                                {(b.alternate_phone || b.profiles?.alternate_phone) && (
+                                  <div><span className="text-text-muted">Alt Phone:</span> <span className="font-mono font-semibold text-accent">{b.alternate_phone || b.profiles?.alternate_phone}</span></div>
+                                )}
+                                <div className="text-text-muted line-clamp-2 max-w-xs mt-1">
+                                  {b.street_address ? `${b.street_address}, ${b.city}, ${b.state} - ${b.pincode}` : (b.address || '—')}
+                                </div>
                               </td>
                               <td className="py-4 px-6 space-y-0.5">
                                 <div className="font-semibold text-text-primary">{b.rooms?.name || 'N/A'}</div>
-                                <div className="text-xs text-text-muted">Guests: {b.number_of_people}</div>
+                                {b.room_number && (
+                                  <div className="text-xs text-accent font-semibold">Unit: {b.room_number}</div>
+                                )}
                               </td>
                               <td className="py-4 px-6 text-center font-mono font-medium">
                                 {b.check_in_date ? new Date(b.check_in_date).toLocaleDateString() : 'N/A'}
@@ -1099,6 +1408,20 @@ export default function AdminDashboard() {
                               </td>
                               <td className="py-4 px-6 text-center text-xs text-text-muted font-mono">
                                 {new Date(b.created_at).toLocaleDateString()}
+                              </td>
+                              <td className="py-4 px-6 text-center">
+                                <button
+                                  onClick={() => handleDeleteBooking(b.id)}
+                                  disabled={deletingBookingId === b.id}
+                                  className="p-1.5 text-error bg-error/5 hover:bg-error/10 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                  title="Permanently Delete Booking"
+                                >
+                                  {deletingBookingId === b.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
                               </td>
                             </tr>
                           ))

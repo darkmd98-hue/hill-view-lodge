@@ -88,7 +88,12 @@ export default function RoomsBookingWizard() {
   const [form, setForm] = useState<BookingFormData>({
     customerName: '',
     phoneNumber: '',
+    alternatePhoneNumber: '',
     address: '',
+    streetAddress: '',
+    city: '',
+    state: '',
+    pincode: '',
     numberOfPeople: 1,
     selectedRoom: '',
     customerEmail: '',
@@ -125,6 +130,11 @@ export default function RoomsBookingWizard() {
             customerName: profileData.full_name,
             customerEmail: authUser.email || '',
             phoneNumber: profileData.phone || '',
+            alternatePhoneNumber: profileData.alternate_phone || '',
+            streetAddress: profileData.street_address || '',
+            city: profileData.city || '',
+            state: profileData.state || '',
+            pincode: profileData.pincode || '',
           }));
         }
       }
@@ -256,8 +266,28 @@ export default function RoomsBookingWizard() {
       errors.phoneNumber = 'Please enter a valid 10-digit phone number';
     }
 
-    if (!fields.address.trim()) {
-      errors.address = 'Address is required';
+    if (fields.alternatePhoneNumber && fields.alternatePhoneNumber.trim()) {
+      if (!PHONE_REGEX.test(fields.alternatePhoneNumber.trim())) {
+        errors.alternatePhoneNumber = 'Please enter a valid 10-digit backup phone number';
+      }
+    }
+
+    if (!fields.streetAddress.trim()) {
+      errors.streetAddress = 'Street/House details are required';
+    }
+
+    if (!fields.city.trim()) {
+      errors.city = 'City is required';
+    }
+
+    if (!fields.state.trim()) {
+      errors.state = 'State is required';
+    }
+
+    if (!fields.pincode.trim()) {
+      errors.pincode = 'Pincode is required';
+    } else if (!/^\d{6}$/.test(fields.pincode.trim())) {
+      errors.pincode = 'Please enter a valid 6-digit Indian postal code';
     }
 
     if (!fields.roomUnitId) {
@@ -826,7 +856,7 @@ export default function RoomsBookingWizard() {
                 <div className="space-y-1.5">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
                     <Phone className="w-3.5 h-3.5 text-text-muted" />
-                    Phone Number *
+                    Primary Phone Number *
                   </label>
                   <input
                     type="tel"
@@ -840,8 +870,25 @@ export default function RoomsBookingWizard() {
                   {formErrors.phoneNumber && <p className="text-error text-xs">{formErrors.phoneNumber}</p>}
                 </div>
 
-                {/* Email Address */}
+                {/* Alternate Phone Number */}
                 <div className="space-y-1.5">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
+                    <Phone className="w-3.5 h-3.5 text-text-muted" />
+                    Alternate Phone Number (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    name="alternatePhoneNumber"
+                    value={form.alternatePhoneNumber || ''}
+                    onChange={handleInputChange}
+                    placeholder="10-digit backup mobile number"
+                    className={`form-input py-2 text-sm ${formErrors.alternatePhoneNumber ? 'error' : ''}`}
+                  />
+                  {formErrors.alternatePhoneNumber && <p className="text-error text-xs">{formErrors.alternatePhoneNumber}</p>}
+                </div>
+
+                {/* Email Address */}
+                <div className="space-y-1.5 md:col-span-2">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
                     <Mail className="w-3.5 h-3.5 text-text-muted" />
                     Customer Email *
@@ -856,6 +903,71 @@ export default function RoomsBookingWizard() {
                     required
                   />
                   {formErrors.customerEmail && <p className="text-error text-xs">{formErrors.customerEmail}</p>}
+                </div>
+
+                {/* Structured Address Header */}
+                <div className="md:col-span-2 pt-2 border-t border-black/5">
+                  <label className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-text-muted">
+                    <MapPin className="w-3.5 h-3.5 text-text-muted" />
+                    Address Details *
+                  </label>
+                </div>
+
+                {/* Street / House details */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <input
+                    type="text"
+                    name="streetAddress"
+                    value={form.streetAddress || ''}
+                    onChange={handleInputChange}
+                    placeholder="Flat / House No. / Street / Area details"
+                    className={`form-input py-2 text-sm ${formErrors.streetAddress ? 'error' : ''}`}
+                    required
+                  />
+                  {formErrors.streetAddress && <p className="text-error text-xs">{formErrors.streetAddress}</p>}
+                </div>
+
+                {/* City */}
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    name="city"
+                    value={form.city || ''}
+                    onChange={handleInputChange}
+                    placeholder="City / Town"
+                    className={`form-input py-2 text-sm ${formErrors.city ? 'error' : ''}`}
+                    required
+                  />
+                  {formErrors.city && <p className="text-error text-xs">{formErrors.city}</p>}
+                </div>
+
+                {/* State */}
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    name="state"
+                    value={form.state || ''}
+                    onChange={handleInputChange}
+                    placeholder="State"
+                    className={`form-input py-2 text-sm ${formErrors.state ? 'error' : ''}`}
+                    required
+                  />
+                  {formErrors.state && <p className="text-error text-xs">{formErrors.state}</p>}
+                </div>
+
+                {/* Pincode */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <input
+                    type="text"
+                    name="pincode"
+                    value={form.pincode || ''}
+                    onChange={handleInputChange}
+                    placeholder="6-digit Pincode (e.g. 560001)"
+                    maxLength={6}
+                    className={`form-input py-2 text-sm ${formErrors.pincode ? 'error' : ''}`}
+                    required
+                  />
+                  {formErrors.pincode && <p className="text-error text-xs">{formErrors.pincode}</p>}
                 </div>
 
                 {/* Check-In Date */}
@@ -920,25 +1032,6 @@ export default function RoomsBookingWizard() {
                     {formErrors.roomUnitId && <p className="text-error text-xs">{formErrors.roomUnitId}</p>}
                   </div>
                 )}
-
-                {/* Address */}
-                <div className="space-y-1.5 md:col-span-2">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-                    <MapPin className="w-3.5 h-3.5 text-text-muted" />
-                    Address *
-                  </label>
-                  <textarea
-                    name="address"
-                    value={form.address}
-                    onChange={handleInputChange}
-                    placeholder="Enter your full residential address"
-                    rows={2}
-                    className={`form-input py-2 text-sm resize-none ${formErrors.address ? 'error' : ''}`}
-                    required
-                  />
-                  {formErrors.address && <p className="text-error text-xs">{formErrors.address}</p>}
-                </div>
-
               </div>
 
               <div className="pt-6 border-t border-black/5 flex justify-end gap-3">
@@ -1022,9 +1115,15 @@ export default function RoomsBookingWizard() {
                       <span className="font-semibold text-text-primary">{form.customerName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-text-muted">Phone Number</span>
+                      <span className="text-text-muted">Primary Phone</span>
                       <span className="font-semibold text-text-primary">{form.phoneNumber}</span>
                     </div>
+                    {form.alternatePhoneNumber && (
+                      <div className="flex justify-between">
+                        <span className="text-text-muted">Alternate Phone</span>
+                        <span className="font-semibold text-text-primary">{form.alternatePhoneNumber}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-text-muted">Check-in Date</span>
                       <span className="font-semibold text-text-primary">{new Date(form.checkInDate).toLocaleDateString()} ({dayOfWeek})</span>
@@ -1039,7 +1138,9 @@ export default function RoomsBookingWizard() {
                     </div>
                     <div className="flex flex-col pt-1 border-t border-black/5">
                       <span className="text-text-muted">Address</span>
-                      <span className="font-semibold text-text-primary mt-0.5">{form.address}</span>
+                      <span className="font-semibold text-text-primary mt-0.5">
+                        {form.streetAddress ? `${form.streetAddress}, ${form.city}, ${form.state} - ${form.pincode}` : form.address}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -6,6 +6,7 @@ export interface Room {
   description: string | null;
   price_per_night: number;
   available_units: number;
+  total_units?: number;
   thumbnail_image_url?: string;
   image_url?: string;
   occupancy_info?: string;
@@ -16,7 +17,12 @@ export interface Room {
 export interface BookingFormData {
   customerName: string;
   phoneNumber: string;
+  alternatePhoneNumber?: string;
   address: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  pincode: string;
   numberOfPeople: number;
   selectedRoom: string; // room UUID from Supabase
   customerEmail: string;

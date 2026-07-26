@@ -37,7 +37,12 @@ export async function submitBooking(
       body: JSON.stringify({
         customerName: formData.customerName,
         phoneNumber: formData.phoneNumber,
-        address: formData.address,
+        alternatePhoneNumber: formData.alternatePhoneNumber,
+        address: formData.address || `${formData.streetAddress}, ${formData.city}, ${formData.state} - ${formData.pincode}`,
+        streetAddress: formData.streetAddress,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
         selectedRoom: formData.selectedRoom,
         customerEmail: formData.customerEmail,
         checkInDate: formData.checkInDate,
