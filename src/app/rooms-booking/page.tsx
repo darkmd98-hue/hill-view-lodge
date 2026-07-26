@@ -17,7 +17,6 @@ import {
 } from '@/lib/animations';
 import {
   Calendar,
-  Users,
   MapPin,
   Mail,
   Phone,
@@ -50,6 +49,12 @@ export default function RoomsBookingWizard() {
   
   // Auth state
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Room Units availability state
+  const [roomUnits, setRoomUnits] = useState<{ id: string; room_number: string; isOccupied: boolean }[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
 
   // Form Fields
   const [form, setForm] = useState<BookingFormData>({
@@ -60,6 +65,7 @@ export default function RoomsBookingWizard() {
     selectedRoom: '',
     customerEmail: '',
     checkInDate: '',
+    roomUnitId: '',
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -72,8 +78,11 @@ export default function RoomsBookingWizard() {
     const supabase = getSupabase();
     
     supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
-      if (authUser) {
+      if (!authUser) {
+        router.push('/login?redirect=/rooms-booking');
+      } else {
         setUser(authUser);
+        setAuthLoading(false);
         
         // Fetch matching profile
         const { data: profileData } = await supabase
@@ -95,8 +104,11 @@ export default function RoomsBookingWizard() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const activeUser = session?.user ?? null;
-      setUser(activeUser);
-      if (activeUser) {
+      if (!activeUser && !authLoading) {
+        router.push('/login?redirect=/rooms-booking');
+      } else if (activeUser) {
+        setUser(activeUser);
+        setAuthLoading(false);
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -116,7 +128,7 @@ export default function RoomsBookingWizard() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router, authLoading]);
 
   // Fetch Rooms
   useEffect(() => {
@@ -133,7 +145,37 @@ export default function RoomsBookingWizard() {
     loadRooms();
   }, []);
 
+  // Load available units when date or category changes
+  useEffect(() => {
+    if (!form.selectedRoom || !form.checkInDate) {
+      setRoomUnits([]);
+      return;
+    }
 
+    setUnitsLoading(true);
+    setUnitsError(null);
+
+    fetch(`/api/bookings/available-units?roomId=${form.selectedRoom}&date=${form.checkInDate}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load room availability.');
+        return res.json();
+      })
+      .then((data: { id: string; room_number: string; isOccupied: boolean }[]) => {
+        setRoomUnits(data);
+        // If current roomUnitId is not in the new list or is occupied, reset it
+        const currentValid = data.find((u) => u.id === form.roomUnitId && !u.isOccupied);
+        if (!currentValid) {
+          setForm((prev) => ({ ...prev, roomUnitId: '' }));
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setUnitsError(err.message || 'Failed to fetch available rooms.');
+      })
+      .finally(() => {
+        setUnitsLoading(false);
+      });
+  }, [form.selectedRoom, form.checkInDate, form.roomUnitId]);
 
   // Compute Day of Week
   const dayOfWeek = useMemo(() => {
@@ -165,10 +207,8 @@ export default function RoomsBookingWizard() {
       errors.address = 'Address is required';
     }
 
-    if (!fields.numberOfPeople || fields.numberOfPeople < 1) {
-      errors.numberOfPeople = 'At least 1 guest is required';
-    } else if (fields.numberOfPeople > 20) {
-      errors.numberOfPeople = 'Maximum 20 guests allowed';
+    if (!fields.roomUnitId) {
+      errors.roomUnitId = 'Please select a room number';
     }
 
     if (!fields.customerEmail.trim()) {
@@ -285,6 +325,7 @@ export default function RoomsBookingWizard() {
                     numberOfPeople: form.numberOfPeople,
                     bookingId: result.bookingId,
                     checkInDate: form.checkInDate,
+                    roomNumber: roomUnits.find(u => u.id === form.roomUnitId)?.room_number || '',
                   });
                   router.push('/rooms-booking/confirmation');
                 } else {
@@ -336,6 +377,7 @@ export default function RoomsBookingWizard() {
             numberOfPeople: form.numberOfPeople,
             bookingId: result.bookingId,
             checkInDate: form.checkInDate,
+            roomNumber: roomUnits.find(u => u.id === form.roomUnitId)?.room_number || '',
           });
           router.push('/rooms-booking/confirmation');
         }
@@ -365,6 +407,15 @@ export default function RoomsBookingWizard() {
 
   // Progress Bar Steps helper
   const progressPercent = (step / 4) * 100;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-dvh bg-[#f7f4ef] flex flex-col items-center justify-center gap-3 text-text-muted">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+        <p className="text-xs font-semibold tracking-wider font-mono">Authenticating...</p>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-dvh bg-[#f7f4ef] text-text-primary py-24 sm:py-28 px-4">
@@ -698,26 +749,6 @@ export default function RoomsBookingWizard() {
                   {formErrors.customerEmail && <p className="text-error text-xs">{formErrors.customerEmail}</p>}
                 </div>
 
-                {/* Guests count */}
-                <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
-                    <Users className="w-3.5 h-3.5 text-text-muted" />
-                    Number of Guests *
-                  </label>
-                  <input
-                    type="number"
-                    name="numberOfPeople"
-                    value={form.numberOfPeople || ''}
-                    onChange={handleInputChange}
-                    placeholder="Guests count"
-                    min={1}
-                    max={20}
-                    className={`form-input py-2 text-sm ${formErrors.numberOfPeople ? 'error' : ''}`}
-                    required
-                  />
-                  {formErrors.numberOfPeople && <p className="text-error text-xs">{formErrors.numberOfPeople}</p>}
-                </div>
-
                 {/* Check-In Date */}
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
@@ -741,6 +772,40 @@ export default function RoomsBookingWizard() {
                   </div>
                   {formErrors.checkInDate && <p className="text-error text-xs">{formErrors.checkInDate}</p>}
                 </div>
+
+                {/* Specific Room Number Selector */}
+                {form.checkInDate && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold text-text-primary">
+                      <Mountain className="w-3.5 h-3.5 text-text-muted" />
+                      Select Room Number *
+                    </label>
+                    {unitsLoading ? (
+                      <div className="flex items-center gap-2 py-2 text-sm text-text-muted">
+                        <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                        <span>Checking room availability...</span>
+                      </div>
+                    ) : unitsError ? (
+                      <p className="text-error text-xs text-rose-600">{unitsError}</p>
+                    ) : (
+                      <select
+                        name="roomUnitId"
+                        value={form.roomUnitId || ''}
+                        onChange={(e) => setForm(prev => ({ ...prev, roomUnitId: e.target.value }))}
+                        className={`form-input py-2 text-sm bg-white ${formErrors.roomUnitId ? 'error' : ''}`}
+                        required
+                      >
+                        <option value="">-- Choose an Available Room --</option>
+                        {roomUnits.map((unit) => (
+                          <option key={unit.id} value={unit.id} disabled={unit.isOccupied}>
+                            {unit.room_number} {unit.isOccupied ? '— occupied (choose another)' : '— available'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {formErrors.roomUnitId && <p className="text-error text-xs">{formErrors.roomUnitId}</p>}
+                  </div>
+                )}
 
                 {/* Address */}
                 <div className="space-y-1.5 md:col-span-2">
@@ -851,8 +916,8 @@ export default function RoomsBookingWizard() {
                       <span className="font-semibold text-text-primary">{new Date(form.checkInDate).toLocaleDateString()} ({dayOfWeek})</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-text-muted">Guest Count</span>
-                      <span className="font-semibold text-text-primary">{form.numberOfPeople} Adults/Children</span>
+                      <span className="text-text-muted">Room Number</span>
+                      <span className="font-semibold text-text-primary">{roomUnits.find((u) => u.id === form.roomUnitId)?.room_number || 'Not Selected'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-text-muted">Email</span>

@@ -38,10 +38,10 @@ export async function submitBooking(
         customerName: formData.customerName,
         phoneNumber: formData.phoneNumber,
         address: formData.address,
-        numberOfPeople: formData.numberOfPeople,
         selectedRoom: formData.selectedRoom,
         customerEmail: formData.customerEmail,
         checkInDate: formData.checkInDate,
+        roomUnitId: formData.roomUnitId,
         token,
       }),
     });

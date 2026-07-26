@@ -86,13 +86,17 @@ export async function POST(request: NextRequest) {
     if (resend) {
       const emailPromises: Promise<unknown>[] = [];
 
+      const isSandbox = fromEmail.includes('onboarding@resend.dev');
+      const recipient = isSandbox ? (ownerEmail || 'codeex97@gmail.com') : user.email!;
+      const subjectPrefix = isSandbox ? `[Sandbox for ${user.email}] ` : '';
+
       // Customer Cancellation Email
       emailPromises.push(
         resend.emails
           .send({
             from: `Hill View Bookings <${fromEmail}>`,
-            to: user.email!,
-            subject: `Booking Cancelled — #${bookingId.slice(0, 8).toUpperCase()}`,
+            to: recipient,
+            subject: `${subjectPrefix}Booking Cancelled — #${bookingId.slice(0, 8).toUpperCase()}`,
             html: `
               <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
                 <h2 style="font-style: italic; color: #0f1410; margin-bottom: 8px;">Hill View</h2>

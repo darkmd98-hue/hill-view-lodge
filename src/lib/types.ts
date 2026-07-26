@@ -21,6 +21,7 @@ export interface BookingFormData {
   selectedRoom: string; // room UUID from Supabase
   customerEmail: string;
   checkInDate: string; // YYYY-MM-DD format
+  roomUnitId?: string;  // individual room unit UUID
 }
 
 // ── Booking Result (from create_booking RPC) ──
@@ -46,6 +47,7 @@ export interface BookingConfirmation {
   numberOfPeople: number;
   bookingId: string;
   checkInDate: string;
+  roomNumber?: string;
 }
 
 // ── Navigation ──

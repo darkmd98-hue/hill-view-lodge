@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Playfair_Display, Inter } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 import PageTransition from '@/components/PageTransition';
 import { BookingProvider } from '@/context/BookingContext';
 
@@ -47,10 +48,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${playfair.variable} ${inter.variable}`}>
-      <body className="antialiased">
+      <body className="antialiased flex flex-col min-h-dvh">
         <BookingProvider>
           <Navbar />
-          <PageTransition>{children}</PageTransition>
+          <div className="flex-grow">
+            <PageTransition>{children}</PageTransition>
+          </div>
+          <Footer />
         </BookingProvider>
       </body>
     </html>

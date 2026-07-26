@@ -1,11 +1,37 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Compass } from 'lucide-react';
+import { Compass, Loader2 } from 'lucide-react';
+import { getSupabase } from '@/lib/supabaseClient';
 import { fadeUp, staggerContainer } from '@/lib/animations';
 import MotionButton from '@/components/MotionButton';
 
 export default function AdventureBookingPage() {
+  const router = useRouter();
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push('/login?redirect=/adventure-booking');
+      } else {
+        setAuthLoading(false);
+      }
+    });
+  }, [router]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-dvh bg-hero-dark flex flex-col items-center justify-center gap-3 text-white/80">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+        <p className="text-xs font-semibold tracking-wider font-mono">Authenticating...</p>
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-dvh bg-hero-dark flex items-center justify-center px-5">
       <motion.div

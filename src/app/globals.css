@@ -136,6 +136,11 @@ body {
   }
 }
 
+/* ── Global Input Font Reset ── */
+input, select, textarea, button {
+  font-family: var(--font-body) !important;
+}
+
 /* ── Form Input Styling ── */
 .form-input {
   width: 100%;

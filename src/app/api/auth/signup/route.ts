@@ -79,10 +79,15 @@ export async function POST(request: NextRequest) {
     if (resendApiKey) {
       try {
         const resend = new Resend(resendApiKey);
+        const ownerEmail = process.env.OWNER_EMAIL || 'codeex97@gmail.com';
+        const isSandbox = fromEmail.includes('onboarding@resend.dev');
+        const recipient = isSandbox ? ownerEmail : email;
+        const subjectPrefix = isSandbox ? `[Sandbox for ${email}] ` : '';
+
         await resend.emails.send({
           from: `Hill View <${fromEmail}>`,
-          to: email,
-          subject: 'Welcome to Hill View Lodge — Account Created',
+          to: recipient,
+          subject: `${subjectPrefix}Welcome to Hill View Lodge — Account Created`,
           html: `
             <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
               <h2 style="font-style: italic; color: #0f1410; margin-bottom: 8px;">Hill View</h2>

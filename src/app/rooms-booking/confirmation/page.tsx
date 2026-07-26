@@ -89,9 +89,9 @@ export default function ConfirmationPage() {
             </span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-text-muted">Guest Count</span>
+            <span className="text-text-muted">Room Number</span>
             <span className="font-medium text-text-primary">
-              {bookingData.numberOfPeople}
+              {bookingData.roomNumber || 'N/A'}
             </span>
           </div>
           <div className="flex justify-between text-xs">

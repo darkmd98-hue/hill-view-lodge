@@ -14,6 +14,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirect, setRedirect] = useState('');
+
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setRedirect(params.get('redirect') || '');
+    }
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +38,7 @@ export default function LoginPage() {
       if (authError) {
         setError(authError.message);
       } else {
-        router.push('/profile');
+        router.push(redirect || '/profile');
         router.refresh();
       }
     } catch {
@@ -125,7 +133,7 @@ export default function LoginPage() {
           {/* Footer Link */}
           <div className="text-center pt-2 border-t border-black/5 text-xs">
             <span className="text-text-muted">Don&apos;t have an account? </span>
-            <Link href="/signup" className="text-accent hover:underline font-semibold">
+            <Link href={`/signup${redirect ? '?redirect=' + encodeURIComponent(redirect) : ''}`} className="text-accent hover:underline font-semibold">
               Sign Up
             </Link>
           </div>

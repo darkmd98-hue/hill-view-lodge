@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { User, Mail, Lock, Phone, Calendar, Loader2, ArrowRight, CheckCircle } from 'lucide-react';
 import { staggerContainer } from '@/lib/animations';
 
@@ -21,6 +21,16 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [redirect, setRedirect] = useState('');
+
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      setRedirect(params.get('redirect') || '');
+    }
+  });
 
   // Derived age calculation
   const ageInfo = useMemo(() => {
@@ -67,7 +77,7 @@ export default function SignupPage() {
       if (response.ok) {
         setSuccess(true);
         setTimeout(() => {
-          router.push('/login');
+          router.push(`/login${redirect ? '?redirect=' + encodeURIComponent(redirect) : ''}`);
         }, 3000);
       } else {
         setError(data.error || 'Registration failed.');
@@ -84,7 +94,8 @@ export default function SignupPage() {
     form.email.trim() &&
     form.password.trim() &&
     form.phone.trim() &&
-    ageInfo.valid;
+    ageInfo.valid &&
+    agreeTerms;
 
   return (
     <main className="min-h-dvh bg-[#f7f4ef] text-text-primary py-24 sm:py-28 px-5 flex items-center justify-center">
@@ -223,6 +234,54 @@ export default function SignupPage() {
                 )}
               </div>
 
+              {/* Terms & Conditions Checkbox */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="agreeTerms"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="w-4 h-4 rounded text-accent border-gray-300 focus:ring-accent mt-0.5 accent-accent"
+                    required
+                  />
+                  <label htmlFor="agreeTerms" className="text-xs text-text-primary">
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowTerms(!showTerms)}
+                      className="text-accent font-semibold hover:underline cursor-pointer"
+                    >
+                      Terms and Conditions
+                    </button>{' '}
+                    of Hill View Lodge *
+                  </label>
+                </div>
+
+                <AnimatePresence>
+                  {showTerms && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-[#f7f4ef]/60 border border-black/5 p-4 rounded-2xl text-[11px] leading-relaxed space-y-2 text-text-muted">
+                        <h4 className="font-bold text-text-primary uppercase tracking-wider text-[10px]">
+                          Terms & Conditions
+                        </h4>
+                        <ul className="list-disc pl-4 space-y-1">
+                          <li>You must be <strong>18 years of age or older</strong> to create an account or make a booking.</li>
+                          <li>Guests must behave respectfully. Physical altercations, harassment, or verbal abuse will not be tolerated and may result in immediate removal without refund.</li>
+                          <li>Bookings for a <strong>&quot;couple&quot; room category</strong> require both guests to be <strong>20 years of age or older</strong>.</li>
+                          <li>Standard cancellation policies apply to all stays. The lodge reserves the right to refuse service.</li>
+                        </ul>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               {/* Submit */}
               <button
                 type="submit"
@@ -251,7 +310,7 @@ export default function SignupPage() {
           {/* Footer Link */}
           <div className="text-center pt-2 border-t border-black/5 text-xs">
             <span className="text-text-muted">Already have an account? </span>
-            <Link href="/login" className="text-accent hover:underline font-semibold">
+            <Link href={`/login${redirect ? '?redirect=' + encodeURIComponent(redirect) : ''}`} className="text-accent hover:underline font-semibold">
               Log In
             </Link>
           </div>

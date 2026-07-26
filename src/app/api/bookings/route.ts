@@ -18,11 +18,12 @@ interface BookingRequest {
   customerName: string;
   phoneNumber: string;
   address: string;
-  numberOfPeople: number;
   selectedRoom: string; // room UUID
   customerEmail: string;
   checkInDate: string; // YYYY-MM-DD
   token?: string; // auth access token
+  roomUnitId: string; // room unit UUID
+  numberOfPeople?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,14 +35,14 @@ export async function POST(request: NextRequest) {
       !body.customerName ||
       !body.phoneNumber ||
       !body.address ||
-      !body.numberOfPeople ||
       !body.selectedRoom ||
       !body.customerEmail ||
       !body.checkInDate ||
-      !body.token
+      !body.token ||
+      !body.roomUnitId
     ) {
       return NextResponse.json(
-        { success: false, error: 'All fields and authentication are required.' },
+        { success: false, error: 'All fields, selected room unit, and authentication are required.' },
         { status: 400 }
       );
     }
@@ -73,10 +74,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (room.available_units <= 0) {
+    // A. Verify client age check for Couple room types (Double / Suite / One Bed)
+    const isCoupleCategory =
+      room.name.toLowerCase().includes('double') ||
+      room.name.toLowerCase().includes('suite') ||
+      room.name.toLowerCase().includes('one bed');
+
+    if (isCoupleCategory) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('date_of_birth')
+        .eq('id', user.id)
+        .single();
+
+      if (profile && profile.date_of_birth) {
+        const birthDate = new Date(profile.date_of_birth);
+        const today = new Date();
+        let userAge = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          userAge--;
+        }
+
+        if (userAge < 20) {
+          return NextResponse.json(
+            { success: false, error: 'Bookings for a couple room category require guests to be 20 years of age or older.' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // B. Check if this specific room number/unit is already booked for that date
+    const { data: existingBooking } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('room_unit_id', body.roomUnitId)
+      .eq('check_in', body.checkInDate)
+      .neq('status', 'cancelled')
+      .maybeSingle();
+
+    if (existingBooking) {
       return NextResponse.json(
-        { success: false, error: 'This room category is currently full.' },
-        { status: 200 }
+        { success: false, error: 'This room is currently occupied for the selected date — please select another room.' },
+        { status: 400 }
       );
     }
 
@@ -102,6 +143,7 @@ export async function POST(request: NextRequest) {
         check_in: body.checkInDate,
         amount: room.price_per_night,
         status: 'pending',
+        room_unit_id: body.roomUnitId,
       })
       .select()
       .single();
@@ -116,16 +158,6 @@ export async function POST(request: NextRequest) {
 
     const bookingId: string = booking.id;
     const roomName: string = room.name;
-
-    // 5. Decrement room units
-    const { error: roomUpdateError } = await supabase
-      .from('rooms')
-      .update({ available_units: room.available_units - 1 })
-      .eq('id', room.id);
-
-    if (roomUpdateError) {
-      console.error('Failed to decrement available units:', roomUpdateError);
-    }
 
     // 6. Handle Razorpay Order Creation (Mandatory for all paid rooms)
     try {
@@ -154,7 +186,7 @@ export async function POST(request: NextRequest) {
         roomName,
         customerName: body.customerName,
         customerEmail: body.customerEmail,
-        numberOfPeople: body.numberOfPeople,
+        numberOfPeople: body.numberOfPeople || 1,
         checkInDate: body.checkInDate,
         paymentRequired: true,
         orderId: order.id,
@@ -163,9 +195,8 @@ export async function POST(request: NextRequest) {
     } catch (rzpErr) {
       console.error('Razorpay order creation failed:', rzpErr);
       
-      // ROLLBACK: Delete booking and restore room units so database state stays consistent
+      // ROLLBACK: Delete booking so database state stays consistent
       await supabase.from('bookings').delete().eq('id', bookingId);
-      await supabase.from('rooms').update({ available_units: room.available_units }).eq('id', room.id);
       
       const errMsg = rzpErr instanceof Error ? rzpErr.message : String(rzpErr);
       return NextResponse.json(
@@ -190,13 +221,17 @@ export async function POST(request: NextRequest) {
       const client = resend as NonNullable<typeof resend>;
       const emailPromises: Promise<unknown>[] = [];
 
+      const isSandbox = fromEmail.includes('onboarding@resend.dev');
+      const recipient = isSandbox ? (ownerEmail || 'codeex97@gmail.com') : body.customerEmail;
+      const subjectPrefix = isSandbox ? `[Sandbox for ${body.customerEmail}] ` : '';
+
       // Customer Email
       emailPromises.push(
         client.emails
           .send({
             from: `Hill View Bookings <${fromEmail}>`,
-            to: body.customerEmail,
-            subject: `Booking Confirmed — #${bookingId.slice(0, 8).toUpperCase()}`,
+            to: recipient,
+            subject: `${subjectPrefix}Booking Confirmed — #${bookingId.slice(0, 8).toUpperCase()}`,
             html: `
               <div style="font-family: Georgia, serif; max-width: 560px; margin: 0 auto; padding: 32px; color: #1a1a1a;">
                 <h2 style="font-style: italic; color: #0f1410; margin-bottom: 8px;">Hill View</h2>
@@ -219,7 +254,7 @@ export async function POST(request: NextRequest) {
                   </tr>
                   <tr>
                     <td style="padding: 8px 0; color: #6b7280;">Guests Count</td>
-                    <td style="padding: 8px 0; text-align: right; font-weight: 600;">${body.numberOfPeople}</td>
+                    <td style="padding: 8px 0; text-align: right; font-weight: 600;">${body.numberOfPeople || 1}</td>
                   </tr>
                   <tr>
                     <td style="padding: 8px 0; color: #6b7280;">Amount</td>
@@ -274,7 +309,7 @@ export async function POST(request: NextRequest) {
       roomName,
       customerName: body.customerName,
       customerEmail: body.customerEmail,
-      numberOfPeople: body.numberOfPeople,
+      numberOfPeople: body.numberOfPeople || 1,
       checkInDate: body.checkInDate,
       paymentRequired: false,
     });
