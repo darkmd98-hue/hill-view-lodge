@@ -23,7 +23,7 @@ DROP POLICY IF EXISTS "Allow public read on room_units" ON public.room_units;
 CREATE POLICY "Allow public read on room_units"
   ON public.room_units
   FOR SELECT
-  TO anon
+  TO public
   USING (true);
 
 -- 2. Seed room_units: insert 5 units for each existing room type

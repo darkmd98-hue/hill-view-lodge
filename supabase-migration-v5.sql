@@ -51,3 +51,11 @@ BEGIN
   END LOOP;
   
 END $$;
+
+-- 3. Correct RLS policies for public/authenticated users
+DROP POLICY IF EXISTS "Allow public read on room_units" ON public.room_units;
+CREATE POLICY "Allow public read on room_units"
+  ON public.room_units
+  FOR SELECT
+  TO public
+  USING (true);
