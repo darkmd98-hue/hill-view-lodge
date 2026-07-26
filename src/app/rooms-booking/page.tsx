@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import Script from 'next/script';
 import Image from 'next/image';
 import { fetchRooms, submitBooking } from '@/lib/api';
 import { useBooking } from '@/context/BookingContext';
@@ -35,9 +34,37 @@ import {
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^\d{10}$/;
 
+const loadRazorpayScript = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if ((window as unknown as { Razorpay: unknown }).Razorpay) return resolve(true);
+
+    const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve(true));
+      existingScript.addEventListener('error', () => resolve(false));
+      // In case it already finished loading between checks
+      if ((window as unknown as { Razorpay: unknown }).Razorpay) resolve(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+};
+
 export default function RoomsBookingWizard() {
   const router = useRouter();
   const { setBookingData } = useBooking();
+
+  // Load Razorpay SDK on component mount unconditionally
+  useEffect(() => {
+    loadRazorpayScript();
+  }, []);
 
   // ── States ──
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -310,7 +337,8 @@ export default function RoomsBookingWizard() {
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token || '';
 
-          if (!(window as unknown as { Razorpay: unknown }).Razorpay) {
+          const rzpLoaded = await loadRazorpayScript();
+          if (!rzpLoaded || !(window as unknown as { Razorpay: unknown }).Razorpay) {
             console.error('Razorpay SDK is not loaded. window.Razorpay is undefined.');
             throw new Error('Razorpay Checkout SDK failed to load. Please verify your internet connection, disable any adblockers, and try again.');
           }
@@ -1080,7 +1108,6 @@ export default function RoomsBookingWizard() {
           )}
 
         </AnimatePresence>
-        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="beforeInteractive" />
       </div>
     </main>
   );
