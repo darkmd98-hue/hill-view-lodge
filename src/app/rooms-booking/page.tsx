@@ -860,11 +860,16 @@ export default function RoomsBookingWizard() {
                         required
                       >
                         <option value="">-- Choose an Available Room --</option>
-                        {roomUnits.map((unit) => (
-                          <option key={unit.id} value={unit.id} disabled={unit.isOccupied}>
-                            {unit.room_number} {unit.isOccupied ? '— occupied (choose another)' : '— available'}
-                          </option>
-                        ))}
+                        {roomUnits.map((unit) => {
+                          const roomNumOnly = unit.room_number.includes(' - Room ')
+                            ? unit.room_number.split(' - Room ')[1]
+                            : unit.room_number;
+                          return (
+                            <option key={unit.id} value={unit.id} disabled={unit.isOccupied}>
+                              Room {roomNumOnly} {unit.isOccupied ? '— occupied (choose another)' : '— available'}
+                            </option>
+                          );
+                        })}
                       </select>
                     )}
                     {formErrors.roomUnitId && <p className="text-error text-xs">{formErrors.roomUnitId}</p>}
