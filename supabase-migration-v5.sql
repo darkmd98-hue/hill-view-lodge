@@ -29,7 +29,7 @@ BEGIN
     END IF;
 
     -- Reassign any bookings referencing duplicate rooms of this category
-    UPDATE public.bookings SET room_type_id = surviving_id WHERE room_type_id IN (
+    UPDATE public.bookings SET room_or_activity_id = surviving_id WHERE room_or_activity_id IN (
       SELECT id FROM public.rooms WHERE name = r.name AND id <> surviving_id
     );
 
