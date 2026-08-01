@@ -227,7 +227,10 @@ export default function AdminDashboard() {
 
   // Load active tab data
   useEffect(() => {
-    if (activeTab === 'rooms') loadRooms();
+    if (activeTab === 'rooms') {
+      loadRooms();
+      loadUnits();
+    }
     else if (activeTab === 'staff') loadStaff();
     else if (activeTab === 'bookings') loadBookings();
     else if (activeTab === 'location') loadSettings();
@@ -818,8 +821,14 @@ export default function AdminDashboard() {
                           disabled={newCategoryLoading}
                           className="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-full text-sm font-semibold transition-all cursor-pointer flex items-center gap-1.5"
                         >
-                          {newCategoryLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                          Save & Seed Units
+                          {newCategoryLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4" />
+                              Save & Seed Units
+                            </>
+                          )}
                         </button>
                       </div>
                     </form>
