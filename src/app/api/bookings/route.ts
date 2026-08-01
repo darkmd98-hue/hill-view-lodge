@@ -14,7 +14,7 @@ interface BookingRequest {
   pincode?: string;
   selectedRoom: string; // room UUID
   customerEmail: string;
-  checkInDate: string; // YYYY-MM-DD
+  checkInDate: string; // YYYY-MM-DD  
   token?: string; // auth access token
   roomUnitId: string; // room unit UUID
   numberOfPeople?: number;
