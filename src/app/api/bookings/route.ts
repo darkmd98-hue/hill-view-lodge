@@ -126,8 +126,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const constructedAddress = body.address || `${body.streetAddress || ''}, ${body.city || ''}, ${body.state || ''} - ${body.pincode || ''}`;
-
     // Create Booking under 'pending' status
     const insertPayload: Record<string, unknown> = {
       user_id: user.id,
@@ -137,11 +135,14 @@ export async function POST(request: NextRequest) {
       amount: room.price_per_night,
       status: 'pending',
       room_unit_id: body.roomUnitId,
-      address: constructedAddress,
     };
 
     if (body.alternatePhoneNumber) insertPayload.alternate_phone = body.alternatePhoneNumber;
-    if (body.streetAddress) insertPayload.street_address = body.streetAddress;
+    if (body.streetAddress) {
+      insertPayload.street_address = body.streetAddress;
+    } else if (body.address) {
+      insertPayload.street_address = body.address;
+    }
     if (body.city) insertPayload.city = body.city;
     if (body.state) insertPayload.state = body.state;
     if (body.pincode) insertPayload.pincode = body.pincode;
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
     if (bookingError || !booking) {
       console.error('Booking insertion error:', bookingError);
       return NextResponse.json(
-        { success: false, error: 'Failed to record booking request.' },
+        { success: false, error: bookingError?.message || 'Failed to record booking request.' },
         { status: 500 }
       );
     }

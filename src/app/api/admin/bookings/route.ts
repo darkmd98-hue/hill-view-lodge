@@ -8,7 +8,6 @@ interface DBBooking {
   check_out: string | null;
   amount: number;
   created_at: string;
-  address: string | null;
   alternate_phone: string | null;
   street_address: string | null;
   city: string | null;
@@ -41,7 +40,6 @@ export async function GET() {
         check_out,
         amount,
         created_at,
-        address,
         alternate_phone,
         street_address,
         city,
@@ -88,6 +86,7 @@ export async function GET() {
       const room = roomsMap.get(b.room_or_activity_id);
       const authUser = b.profiles?.id ? usersMap.get(b.profiles.id) : undefined;
       const roomNumber = b.room_unit_id ? unitsMap.get(b.room_unit_id) || '' : '';
+      const fullAddress = b.street_address ? `${b.street_address}, ${b.city || ''}, ${b.state || ''} - ${b.pincode || ''}` : '';
 
       return {
         id: b.id,
@@ -95,7 +94,7 @@ export async function GET() {
         check_in_date: b.check_in,
         created_at: b.created_at,
         amount: b.amount,
-        address: b.address || '',
+        address: fullAddress,
         alternate_phone: b.alternate_phone || b.profiles?.alternate_phone || '',
         street_address: b.street_address || '',
         city: b.city || '',
