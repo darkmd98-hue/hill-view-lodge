@@ -656,53 +656,55 @@ export default function AdminDashboard() {
       <div className="flex-1 flex flex-col lg:flex-row">
         
         {/* ── Left Sidebar Navigation ── */}
-        <aside className="w-full lg:w-64 bg-white border-r border-black/5 p-4 space-y-1">
-          <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-3 mb-2">Management</p>
-          <button
-            onClick={() => setActiveTab('rooms')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'rooms' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
-            }`}
-          >
-            <Mountain className="w-4.5 h-4.5" />
-            Room Pricing
-          </button>
-          <button
-            onClick={() => setActiveTab('units')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'units' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
-            }`}
-          >
-            <Mountain className="w-4.5 h-4.5 text-orange-500" />
-            Room Units
-          </button>
-          <button
-            onClick={() => setActiveTab('staff')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'staff' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
-            }`}
-          >
-            <Users className="w-4.5 h-4.5" />
-            Staff Details
-          </button>
-          <button
-            onClick={() => setActiveTab('bookings')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'bookings' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
-            }`}
-          >
-            <Calendar className="w-4.5 h-4.5" />
-            Customer Bookings
-          </button>
-          <button
-            onClick={() => setActiveTab('location')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'location' ? 'bg-accent/10 text-accent font-semibold' : 'text-text-muted hover:bg-black/5'
-            }`}
-          >
-            <MapPin className="w-4.5 h-4.5" />
-            Location & Settings
-          </button>
+        <aside className="w-full lg:w-64 bg-white border-b lg:border-b-0 lg:border-r border-black/5 p-3 sm:p-4 shrink-0 overflow-x-auto lg:overflow-x-visible">
+          <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-2 mb-2 hidden lg:block">Management</p>
+          <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
+            <button
+              onClick={() => setActiveTab('rooms')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
+                activeTab === 'rooms' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
+              }`}
+            >
+              <Mountain className="w-4 h-4 shrink-0" />
+              Room Pricing
+            </button>
+            <button
+              onClick={() => setActiveTab('units')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
+                activeTab === 'units' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
+              }`}
+            >
+              <Mountain className="w-4 h-4 text-orange-500 shrink-0" />
+              Room Units
+            </button>
+            <button
+              onClick={() => setActiveTab('staff')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
+                activeTab === 'staff' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
+              }`}
+            >
+              <Users className="w-4 h-4 shrink-0" />
+              Staff Details
+            </button>
+            <button
+              onClick={() => setActiveTab('bookings')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
+                activeTab === 'bookings' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
+              }`}
+            >
+              <Calendar className="w-4 h-4 shrink-0" />
+              Customer Bookings
+            </button>
+            <button
+              onClick={() => setActiveTab('location')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
+                activeTab === 'location' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
+              }`}
+            >
+              <MapPin className="w-4 h-4 shrink-0" />
+              Location & Settings
+            </button>
+          </div>
         </aside>
 
         {/* ── Main Dashboard Workspace ── */}

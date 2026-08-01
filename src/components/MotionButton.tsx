@@ -25,11 +25,11 @@ export default function MotionButton({
 
   const variantStyles = {
     primary:
-      'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20',
+      'bg-accent text-white hover:bg-accent-hover font-bold shadow-xl shadow-accent/30 tracking-wide border border-accent/40',
     secondary:
-      'bg-white/10 text-white border border-white/20 hover:bg-white/20 backdrop-blur-sm',
+      'bg-white/15 text-white border border-white/40 hover:bg-white/30 backdrop-blur-md font-semibold',
     outline:
-      'bg-transparent text-accent border-2 border-accent hover:bg-accent hover:text-white',
+      'bg-transparent text-accent border-2 border-accent hover:bg-accent hover:text-white font-bold',
   };
 
   const sizeStyles = {

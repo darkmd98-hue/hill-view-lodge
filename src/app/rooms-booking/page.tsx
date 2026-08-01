@@ -523,10 +523,10 @@ export default function RoomsBookingWizard() {
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* ── Wizard Header & Progress Bar ── */}
-        <div className="bg-white p-6 rounded-3xl border border-black/5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-widest text-text-muted">
+        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-black/5 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-muted">
             <span>Step {step} of 4</span>
-            <span>
+            <span className="text-right">
               {step === 1 && 'Select Room category'}
               {step === 2 && 'Review Room Features'}
               {step === 3 && 'Enter Guest Details'}
@@ -557,8 +557,8 @@ export default function RoomsBookingWizard() {
               className="space-y-6"
             >
               <div className="text-center max-w-xl mx-auto space-y-2">
-                <h1 className="font-display italic text-4xl font-bold">Select Category</h1>
-                <p className="text-text-muted text-sm">
+                <h1 className="font-display italic text-3xl sm:text-4xl font-bold text-text-primary">Select Category</h1>
+                <p className="text-text-muted text-sm leading-relaxed">
                   Choose from our carefully crafted spaces designed for comfort, luxury, and tranquility.
                 </p>
               </div>
@@ -573,109 +573,114 @@ export default function RoomsBookingWizard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {rooms.map((room) => (
-                    <motion.div
-                      key={room.id}
-                      variants={fadeUp}
-                      whileHover={{ y: -6 }}
-                      className="bg-white rounded-3xl border border-black/5 overflow-hidden shadow-sm flex flex-col justify-between"
-                    >
-                      <div className="relative h-48 w-full bg-[#f1eeeb]">
-                        <Image
-                          src={room.thumbnail_image_url || '/images/hero-interior.png'}
-                          alt={room.name}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, 33vw"
-                        />
-                        {!allRoomUnits.some((u) => u.room_type_id === room.id && u.status !== 'out_of_service') && (
-                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white font-semibold uppercase tracking-wider text-xs">
-                            Sold Out
-                          </div>
-                        )}
-                      </div>
+                  {rooms.map((room) => {
+                    const activeUnits = allRoomUnits.filter(
+                      (u) => u.room_type_id === room.id && u.status !== 'out_of_service'
+                    );
+                    const hasActiveRooms = activeUnits.length > 0;
 
-                      <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
-                        {(() => {
-                          const activeUnits = allRoomUnits.filter(
-                            (u) => u.room_type_id === room.id && u.status !== 'out_of_service'
-                          );
-                          return (
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="inline-block text-[10px] uppercase font-bold tracking-widest bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
-                                  {room.occupancy_info || '2 Adults, 1 Child'}
-                                </span>
-                                <span className="text-xs text-text-muted">
-                                  {activeUnits.length} rooms left
-                                </span>
-                              </div>
-                              <div>
-                                <h2 className="font-display italic text-xl font-bold text-text-primary leading-tight">
-                                  {room.name}
-                                </h2>
-                                <p className="text-text-muted text-xs line-clamp-2 leading-relaxed mt-1">
-                                  {room.description || 'Experience comfort and stunning valley coordinates at Hill View.'}
-                                </p>
-                              </div>
+                    return (
+                      <motion.div
+                        key={room.id}
+                        variants={fadeUp}
+                        whileHover={hasActiveRooms ? { y: -6 } : undefined}
+                        onClick={() => {
+                          if (hasActiveRooms) {
+                            setSelectedRoom(room);
+                            setForm((prev) => ({ ...prev, selectedRoom: room.id }));
+                            setStep(2);
+                          }
+                        }}
+                        className={`bg-white rounded-3xl border border-black/5 overflow-hidden shadow-sm flex flex-col justify-between transition-all ${
+                          hasActiveRooms ? 'cursor-pointer hover:shadow-md' : 'opacity-90'
+                        }`}
+                      >
+                        <div className="relative h-48 w-full bg-[#f1eeeb]">
+                          <Image
+                            src={room.thumbnail_image_url || '/images/hero-interior.png'}
+                            alt={room.name}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 33vw"
+                          />
+                          {!hasActiveRooms && (
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white font-semibold uppercase tracking-wider text-xs">
+                              Sold Out
+                            </div>
+                          )}
+                        </div>
 
-                              <div className="pt-1.5 space-y-1">
-                                <span className="text-[9px] text-text-muted uppercase tracking-wider block font-semibold">Available Rooms:</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {activeUnits.map((u) => {
-                                    const roomNumOnly = u.room_number.includes(' - Room ')
-                                      ? u.room_number.split(' - Room ')[1]
-                                      : u.room_number;
-                                    return (
-                                      <span
-                                        key={u.id}
-                                        className="text-[9px] bg-[#f7f4ef] border border-black/5 text-text-muted px-2 py-0.5 rounded-md font-semibold font-mono"
-                                      >
-                                        Room {roomNumOnly}
-                                      </span>
-                                    );
-                                  })}
-                                  {activeUnits.length === 0 && (
-                                    <span className="text-[10px] italic text-rose-600">No rooms active</span>
-                                  )}
-                                </div>
+                        <div className="p-6 space-y-4 flex-1 flex flex-col justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="inline-block text-[10px] uppercase font-bold tracking-widest bg-accent/10 text-accent px-2.5 py-0.5 rounded-full">
+                                {room.occupancy_info || '2 Adults, 1 Child'}
+                              </span>
+                              <span className="text-xs text-text-muted font-medium">
+                                {activeUnits.length} rooms left
+                              </span>
+                            </div>
+                            <div>
+                              <h2 className="font-display italic text-xl font-bold text-text-primary leading-tight">
+                                {room.name}
+                              </h2>
+                              <p className="text-text-muted text-xs line-clamp-2 leading-relaxed mt-1">
+                                {room.description || 'Experience comfort and stunning valley coordinates at Hill View.'}
+                              </p>
+                            </div>
+
+                            <div className="pt-1.5 space-y-1">
+                              <span className="text-[9px] text-text-muted uppercase tracking-wider block font-semibold">Available Rooms:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {activeUnits.map((u) => {
+                                  const roomNumOnly = u.room_number.includes(' - Room ')
+                                    ? u.room_number.split(' - Room ')[1]
+                                    : u.room_number;
+                                  return (
+                                    <span
+                                      key={u.id}
+                                      className="text-[9px] bg-[#f7f4ef] border border-black/5 text-text-muted px-2 py-0.5 rounded-md font-semibold font-mono"
+                                    >
+                                      Room {roomNumOnly}
+                                    </span>
+                                  );
+                                })}
+                                {activeUnits.length === 0 && (
+                                  <span className="text-[10px] italic text-rose-600 font-medium">No rooms active</span>
+                                )}
                               </div>
                             </div>
-                          );
-                        })()}
-
-                        <div className="flex items-center justify-between pt-3 border-t border-black/5">
-                          <div>
-                            <span className="text-[10px] text-text-muted block uppercase tracking-wider">Per Night</span>
-                            <span className="font-semibold text-text-primary">{formatPrice(room.price_per_night)}</span>
                           </div>
-                          {(() => {
-                            const hasActiveRooms = allRoomUnits.some(
-                              (u) => u.room_type_id === room.id && u.status !== 'out_of_service'
-                            );
-                            return (
-                              <button
-                                disabled={!hasActiveRooms}
-                                onClick={() => {
+
+                          <div className="flex items-center justify-between pt-3 border-t border-black/5">
+                            <div>
+                              <span className="text-[10px] text-text-muted block uppercase tracking-wider font-semibold">Per Night</span>
+                              <span className="font-bold text-text-primary text-base">{formatPrice(room.price_per_night)}</span>
+                            </div>
+                            <button
+                              disabled={!hasActiveRooms}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (hasActiveRooms) {
                                   setSelectedRoom(room);
                                   setForm((prev) => ({ ...prev, selectedRoom: room.id }));
                                   setStep(2);
-                                }}
-                                className={`flex items-center gap-1 text-xs font-semibold px-4 py-2 rounded-full border transition-all cursor-pointer ${
-                                  !hasActiveRooms
-                                    ? 'border-black/5 bg-gray-50 text-text-muted cursor-not-allowed'
-                                    : 'border-accent/30 bg-accent/5 text-accent hover:bg-accent hover:text-white shadow-sm'
-                                }`}
-                              >
-                                Select
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            );
-                          })()}
+                                }
+                              }}
+                              className={`flex items-center gap-1 text-xs font-bold px-4 py-2 rounded-full border transition-all cursor-pointer ${
+                                !hasActiveRooms
+                                  ? 'border-black/5 bg-gray-100 text-text-muted cursor-not-allowed'
+                                  : 'border-accent/40 bg-accent text-white hover:bg-accent-hover shadow-md shadow-accent/20'
+                              }`}
+                            >
+                              Select
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               )}
             </motion.div>
@@ -1190,10 +1195,10 @@ export default function RoomsBookingWizard() {
                       if (isFormValid) setIsFormLocked(true);
                     }}
                     disabled={isFormLocked || !isFormValid}
-                    className={`px-5 py-2.5 text-xs font-semibold rounded-full shadow-lg transition-all ${
+                    className={`px-6 py-2.5 text-xs font-bold rounded-full shadow-lg transition-all ${
                       !isFormLocked && isFormValid
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 cursor-pointer'
-                        : 'bg-gray-100 text-text-muted cursor-not-allowed shadow-none'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 cursor-pointer border border-emerald-500'
+                        : 'bg-gray-100 text-text-muted cursor-not-allowed shadow-none border border-black/5'
                     }`}
                   >
                     Confirm Details
@@ -1203,10 +1208,10 @@ export default function RoomsBookingWizard() {
                   <button
                     onClick={handleReserveSubmit}
                     disabled={!isFormLocked || isSubmitting}
-                    className={`flex items-center gap-1.5 px-6 py-2.5 text-xs font-semibold rounded-full shadow-xl transition-all ${
+                    className={`flex items-center gap-2 px-7 py-2.5 text-xs font-bold rounded-full shadow-xl transition-all ${
                       isFormLocked && !isSubmitting
-                        ? 'bg-accent hover:bg-accent-hover text-white shadow-accent/25 cursor-pointer'
-                        : 'bg-gray-100 text-text-muted cursor-not-allowed shadow-none'
+                        ? 'bg-accent hover:bg-accent-hover text-white shadow-accent/35 cursor-pointer border border-accent-hover tracking-wide'
+                        : 'bg-gray-100 text-text-muted cursor-not-allowed shadow-none border border-black/5'
                     }`}
                   >
                     {isSubmitting ? (

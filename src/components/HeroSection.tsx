@@ -54,7 +54,7 @@ export default function HeroSection() {
         {/* Tagline */}
         <motion.p
           variants={fadeUp}
-          className="text-white/70 text-lg sm:text-xl md:text-2xl font-light max-w-2xl mb-10 leading-relaxed"
+          className="text-slate-100 text-lg sm:text-xl md:text-2xl font-normal max-w-2xl mb-10 leading-relaxed drop-shadow-sm"
         >
           Wake up above the clouds — your peaceful hillside escape
           awaits.
@@ -79,9 +79,9 @@ export default function HeroSection() {
           className="absolute bottom-8 left-1/2 -translate-x-1/2"
           aria-hidden="true"
         >
-          <div className="w-6 h-10 rounded-full border-2 border-white/30 flex justify-center pt-2">
+          <div className="w-6 h-10 rounded-full border-2 border-white/60 flex justify-center pt-2 backdrop-blur-xs">
             <motion.div
-              className="w-1 h-2.5 bg-white/60 rounded-full"
+              className="w-1 h-2.5 bg-white/90 rounded-full"
               animate={{ y: [0, 8, 0] }}
               transition={{
                 duration: 1.5,

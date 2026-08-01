@@ -58,7 +58,7 @@ export default function AdventureBookingPage() {
         {/* Description */}
         <motion.p
           variants={fadeUp}
-          className="text-white/60 text-lg mb-10 leading-relaxed"
+          className="text-slate-200 text-lg sm:text-xl font-normal mb-10 leading-relaxed max-w-md mx-auto"
         >
           Our adventure experiences are being curated. Stay tuned for exciting
           outdoor activities, guided treks, and unforgettable experiences across
