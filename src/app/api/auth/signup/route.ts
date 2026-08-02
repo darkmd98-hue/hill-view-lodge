@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { Resend } from 'resend';
+import { isValidEmail, isValidPhone, isValidString, VALIDATION_LIMITS } from '@/lib/validation';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 
 // Helper to calculate exact age and validate DOB
 function isValidDOB(dob: string): { valid: boolean; age: number } {
@@ -20,16 +22,47 @@ function isValidDOB(dob: string): { valid: boolean; age: number } {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, fullName, phone, dob } = await request.json();
+    // Rate limit check (strict — spam account prevention)
+    const ip = getClientIP(request);
+    const rl = checkRateLimit('signup', ip, RATE_LIMITS.AUTH_MAX_REQUESTS, RATE_LIMITS.AUTH_WINDOW_MS);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many signup attempts. Please try again in ${rl.retryAfterSeconds} seconds.` },
+        { status: 429 }
+      );
+    }
 
-    // 1. Validate fields
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+    }
+
+    const { email, password, fullName, phone, dob } = body;
+
+    // 1. Validate all fields — strict server-side checks
     if (!email || !password || !fullName || !phone || !dob) {
       return NextResponse.json({ error: 'All fields are required.' }, { status: 400 });
     }
 
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
+    }
+
+    if (!isValidString(fullName, VALIDATION_LIMITS.NAME_MIN_LENGTH, VALIDATION_LIMITS.NAME_MAX_LENGTH)) {
+      return NextResponse.json({ error: `Name must be between ${VALIDATION_LIMITS.NAME_MIN_LENGTH} and ${VALIDATION_LIMITS.NAME_MAX_LENGTH} characters.` }, { status: 400 });
+    }
+
+    if (typeof password !== 'string' || password.length < VALIDATION_LIMITS.PASSWORD_MIN_LENGTH || password.length > VALIDATION_LIMITS.PASSWORD_MAX_LENGTH) {
+      return NextResponse.json({ error: `Password must be between ${VALIDATION_LIMITS.PASSWORD_MIN_LENGTH} and ${VALIDATION_LIMITS.PASSWORD_MAX_LENGTH} characters.` }, { status: 400 });
+    }
+
+    if (!isValidPhone(phone)) {
+      return NextResponse.json({ error: 'Please enter a valid 10-digit Indian phone number.' }, { status: 400 });
+    }
+
     const { valid: ageValid, age } = isValidDOB(dob);
     if (!ageValid) {
-      return NextResponse.json({ error: `Invalid date of birth. Minimum age requirement is 18 (current age is ${age}).` }, { status: 400 });
+      return NextResponse.json({ error: `Invalid date of birth. Minimum age requirement is 18 (calculated age: ${age}).` }, { status: 400 });
     }
 
     const supabase = getSupabaseAdmin();
@@ -50,9 +83,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create the Auth User in Supabase
-    // Note: In local/dev environments, email verification is enabled by default.
-    // If you want auto-confirm, set email_confirm: true. We use email_confirm: true 
-    // to allow instant profile creation, while Supabase handles verification links if needed.
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -61,13 +91,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (authError) {
-      console.error('Supabase Auth error:', authError);
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+      console.error('Supabase Auth signup error:', authError);
+      // Generic message to prevent email enumeration
+      return NextResponse.json({ error: 'Account creation failed. The email may already be in use.' }, { status: 400 });
     }
 
     const user = authData.user;
     if (!user) {
-      return NextResponse.json({ error: 'Failed to create user.' }, { status: 500 });
+      return NextResponse.json({ error: 'Account creation failed. Please try again.' }, { status: 500 });
     }
 
     // 3. Insert into the public profiles table
@@ -81,10 +112,10 @@ export async function POST(request: NextRequest) {
       });
 
     if (profileError) {
-      console.error('Supabase profile insertion error:', profileError);
+      console.error('Profile insertion error:', profileError);
       // Clean up the created auth user to avoid orphan accounts on error
       await supabase.auth.admin.deleteUser(user.id);
-      return NextResponse.json({ error: 'Failed to initialize user profile.' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to initialize user profile. Please try again.' }, { status: 500 });
     }
 
     // 4. Send Welcome Email via Resend
@@ -130,6 +161,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, userId: user.id });
   } catch (err) {
     console.error('Signup handler error:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

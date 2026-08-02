@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { isValidPhone, isValidEmail, isValidDate, isValidUUID, isValidString, isValidPincode } from '@/lib/validation';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import Razorpay from 'razorpay';
 
 // ── Request body shape ──
@@ -22,9 +24,19 @@ interface BookingRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit check (moderate — booking abuse prevention)
+    const ip = getClientIP(request);
+    const rl = checkRateLimit('bookings', ip, RATE_LIMITS.BOOKING_MAX_REQUESTS, RATE_LIMITS.BOOKING_WINDOW_MS);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: `Too many booking requests. Please try again in ${rl.retryAfterSeconds} seconds.` },
+        { status: 429 }
+      );
+    }
+
     const body: BookingRequest = await request.json();
 
-    // 1. Basic validation
+    // 1. Presence validation
     if (
       !body.customerName ||
       !body.phoneNumber ||
@@ -40,9 +52,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 2. Format validation
+    if (!isValidString(body.customerName, 2, 100)) {
+      return NextResponse.json({ success: false, error: 'Please enter a valid name (2-100 characters).' }, { status: 400 });
+    }
+
+    if (!isValidPhone(body.phoneNumber)) {
+      return NextResponse.json({ success: false, error: 'Please enter a valid 10-digit Indian phone number.' }, { status: 400 });
+    }
+
+    if (body.alternatePhoneNumber && !isValidPhone(body.alternatePhoneNumber)) {
+      return NextResponse.json({ success: false, error: 'Alternate phone number is invalid.' }, { status: 400 });
+    }
+
+    if (!isValidEmail(body.customerEmail)) {
+      return NextResponse.json({ success: false, error: 'Please enter a valid email address.' }, { status: 400 });
+    }
+
+    if (!isValidDate(body.checkInDate)) {
+      return NextResponse.json({ success: false, error: 'Check-in date must be today or in the future (YYYY-MM-DD).' }, { status: 400 });
+    }
+
+    if (!isValidUUID(body.selectedRoom)) {
+      return NextResponse.json({ success: false, error: 'Invalid room selection.' }, { status: 400 });
+    }
+
+    if (!isValidUUID(body.roomUnitId)) {
+      return NextResponse.json({ success: false, error: 'Invalid room unit selection.' }, { status: 400 });
+    }
+
+    if (body.pincode && !isValidPincode(body.pincode)) {
+      return NextResponse.json({ success: false, error: 'Pincode must be a 6-digit number.' }, { status: 400 });
+    }
+
     const supabase = getSupabaseAdmin();
 
-    // 2. Verify User Auth Token
+    // 3. Verify User Auth Token
     const { data: { user }, error: authError } = await supabase.auth.getUser(body.token);
     if (authError || !user) {
       console.error('API Auth validation failed:', authError);
@@ -52,7 +97,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch Room Pricing and Availability
+    // 4. Fetch Room Pricing and Availability
     const { data: room, error: roomError } = await supabase
       .from('rooms')
       .select('*')
@@ -114,15 +159,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Validate Razorpay configurations for paid bookings
+    // 5. Validate Razorpay configurations for paid bookings
     const rzpKeyId = process.env.RAZORPAY_KEY_ID;
     const rzpSecret = process.env.RAZORPAY_KEY_SECRET;
 
     if (!rzpKeyId || !rzpSecret) {
-      console.error('Server side configuration missing: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not set.');
+      console.error('RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not set.');
       return NextResponse.json(
-        { success: false, error: 'Payment gateway configuration is missing on the server. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.' },
-        { status: 500 }
+        { success: false, error: 'Payment gateway is temporarily unavailable. Please try again later.' },
+        { status: 503 }
       );
     }
 
@@ -156,7 +201,7 @@ export async function POST(request: NextRequest) {
     if (bookingError || !booking) {
       console.error('Booking insertion error:', bookingError);
       return NextResponse.json(
-        { success: false, error: bookingError?.message || 'Failed to record booking request.' },
+        { success: false, error: 'Failed to record booking request. Please try again.' },
         { status: 500 }
       );
     }
@@ -203,9 +248,8 @@ export async function POST(request: NextRequest) {
       // ROLLBACK: Delete booking so database state stays consistent
       await supabase.from('bookings').delete().eq('id', bookingId);
       
-      const errMsg = rzpErr instanceof Error ? rzpErr.message : String(rzpErr);
       return NextResponse.json(
-        { success: false, error: `Failed to create payment gateway order: ${errMsg}` },
+        { success: false, error: 'Failed to create payment order. Please try again.' },
         { status: 500 }
       );
     }
@@ -213,7 +257,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error('Booking API error:', err);
     return NextResponse.json(
-      { success: false, error: 'Internal server error.' },
+      { success: false, error: 'Something went wrong. Please try again.' },
       { status: 500 }
     );
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { isValidString, isValidPhone, isValidEmail } from '@/lib/validation';
 
 /**
  * CRUD API for staff members:
@@ -17,26 +18,43 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Failed to fetch staff:', error);
+      return NextResponse.json({ error: 'Failed to fetch staff records.' }, { status: 500 });
     }
     return NextResponse.json(data);
   } catch (error) {
     console.error('Failed to get staff:', error);
-    return NextResponse.json({ error: 'Failed to fetch staff' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch staff records.' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+
+    if (!body) {
+      return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+    }
+
+    if (!isValidString(body.name, 2, 100)) {
+      return NextResponse.json({ error: 'Staff name is required (2-100 characters).' }, { status: 400 });
+    }
+
+    if (body.phone && !isValidPhone(body.phone)) {
+      return NextResponse.json({ error: 'Please enter a valid phone number.' }, { status: 400 });
+    }
+
+    if (body.email && !isValidEmail(body.email)) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
+    }
 
     const { data, error } = await supabase
       .from('staff')
       .insert({
-        name: body.name,
-        role: body.role,
-        phone: body.phone,
+        name: body.name.trim(),
+        role: body.role || null,
+        phone: body.phone || null,
         email: body.email || null,
         joined_date: body.joined_date || null,
       })
@@ -44,22 +62,35 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Failed to create staff:', error);
+      return NextResponse.json({ error: 'Failed to add staff member.' }, { status: 500 });
     }
     return NextResponse.json(data);
   } catch (error) {
     console.error('Failed to create staff:', error);
-    return NextResponse.json({ error: 'Failed to add staff' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to add staff member.' }, { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
 
-    if (!body.id) {
-      return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
+    if (!body || !body.id) {
+      return NextResponse.json({ error: 'Staff ID is required.' }, { status: 400 });
+    }
+
+    if (body.name !== undefined && !isValidString(body.name, 2, 100)) {
+      return NextResponse.json({ error: 'Staff name must be 2-100 characters.' }, { status: 400 });
+    }
+
+    if (body.phone && !isValidPhone(body.phone)) {
+      return NextResponse.json({ error: 'Please enter a valid phone number.' }, { status: 400 });
+    }
+
+    if (body.email && !isValidEmail(body.email)) {
+      return NextResponse.json({ error: 'Please enter a valid email address.' }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -76,12 +107,13 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Failed to update staff:', error);
+      return NextResponse.json({ error: 'Failed to update staff member.' }, { status: 500 });
     }
     return NextResponse.json(data);
   } catch (error) {
     console.error('Failed to update staff:', error);
-    return NextResponse.json({ error: 'Failed to update staff' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update staff member.' }, { status: 500 });
   }
 }
 
@@ -92,7 +124,7 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Staff ID is required.' }, { status: 400 });
     }
 
     const { error } = await supabase
@@ -101,11 +133,12 @@ export async function DELETE(request: NextRequest) {
       .eq('id', id);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Failed to delete staff:', error);
+      return NextResponse.json({ error: 'Failed to delete staff member.' }, { status: 500 });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete staff:', error);
-    return NextResponse.json({ error: 'Failed to delete staff' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete staff member.' }, { status: 500 });
   }
 }

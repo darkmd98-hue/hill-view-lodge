@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     if (fetchError) {
       console.error('Failed to fetch room units:', fetchError);
-      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to fetch available room units.' }, { status: 500 });
     }
 
     // 2. Fetch all active bookings for this date and room category
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (bookingsError) {
       console.error('Failed to fetch bookings for date:', bookingsError);
-      return NextResponse.json({ error: bookingsError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to fetch room availability.' }, { status: 500 });
     }
 
     const bookedUnitIds = new Set(bookings?.map((b) => b.room_unit_id) || []);

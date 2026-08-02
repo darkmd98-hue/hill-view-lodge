@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
             .update({ status: 'confirmed' })
             .eq('id', payment.booking_id);
 
-          console.log(`redundant webhook payment verification succeeded for order: ${orderId}`);
+          console.info(`redundant webhook payment verification succeeded for order: ${orderId}`);
         }
       }
     }

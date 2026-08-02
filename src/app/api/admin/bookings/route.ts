@@ -58,7 +58,7 @@ export async function GET() {
 
     if (bookingsError) {
       console.error('Failed to query bookings:', bookingsError);
-      return NextResponse.json({ error: bookingsError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to fetch bookings.' }, { status: 500 });
     }
 
     // 2. Fetch rooms to map room names
@@ -158,7 +158,7 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       console.error('Failed to delete booking:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to delete booking record.' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
