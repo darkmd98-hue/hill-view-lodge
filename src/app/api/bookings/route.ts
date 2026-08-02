@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isValidPhone, isValidEmail, isValidDate, isValidUUID, isValidString, isValidPincode } from '@/lib/validation';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { calculateInvoice } from '@/lib/pricing';
 import Razorpay from 'razorpay';
 
 // ── Request body shape ──
@@ -20,6 +21,8 @@ interface BookingRequest {
   token?: string; // auth access token
   roomUnitId: string; // room unit UUID
   numberOfPeople?: number;
+  extraAdults?: number;
+  extraChildren?: number;
 }
 
 export async function POST(request: NextRequest) {
@@ -97,7 +100,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Fetch Room Pricing and Availability
+    // 4. Fetch Room Pricing and Occupancy Limits
     const { data: room, error: roomError } = await supabase
       .from('rooms')
       .select('*')
@@ -111,6 +114,13 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // Validate extra guest limits against database room max extra values
+    const maxExtraAdults = room.max_extra_adults ?? 2;
+    const maxExtraChildren = room.max_extra_children ?? 2;
+
+    const extraAdults = Math.max(0, Math.min(Number(body.extraAdults) || 0, maxExtraAdults));
+    const extraChildren = Math.max(0, Math.min(Number(body.extraChildren) || 0, maxExtraChildren));
 
     // A. Verify client age check for Couple room types (Double / Suite / One Bed)
     const isCoupleCategory =
@@ -159,7 +169,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Validate Razorpay configurations for paid bookings
+    // 5. Compute server-side invoice (recalculated from trusted database prices & extra guest limits)
+    const invoice = calculateInvoice({
+      pricePerNight: Number(room.price_per_night),
+      nights: 1,
+      extraAdults,
+      extraChildren,
+    });
+
+    // 6. Validate Razorpay configurations for paid bookings
     const rzpKeyId = process.env.RAZORPAY_KEY_ID;
     const rzpSecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -177,9 +195,11 @@ export async function POST(request: NextRequest) {
       service_type: 'room',
       room_or_activity_id: room.id,
       check_in: body.checkInDate,
-      amount: room.price_per_night,
+      amount: invoice.grandTotal,
       status: 'pending',
       room_unit_id: body.roomUnitId,
+      extra_adults: extraAdults,
+      extra_children: extraChildren,
     };
 
     if (body.alternatePhoneNumber) insertPayload.alternate_phone = body.alternatePhoneNumber;
@@ -209,7 +229,7 @@ export async function POST(request: NextRequest) {
     const bookingId: string = booking.id;
     const roomName: string = room.name;
 
-    // 6. Handle Razorpay Order Creation (Mandatory for all paid rooms)
+    // 7. Handle Razorpay Order Creation (using recalculated grandTotal in paise)
     try {
       const razorpay = new Razorpay({
         key_id: rzpKeyId,
@@ -217,7 +237,7 @@ export async function POST(request: NextRequest) {
       });
 
       const order = await razorpay.orders.create({
-        amount: Math.round(room.price_per_night * 100), // paise
+        amount: Math.round(invoice.grandTotal * 100), // paise
         currency: 'INR',
         receipt: bookingId,
       });
@@ -226,7 +246,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('payments').insert({
         booking_id: bookingId,
         razorpay_order_id: order.id,
-        amount: room.price_per_night,
+        amount: invoice.grandTotal,
         status: 'created',
       });
 
@@ -241,6 +261,7 @@ export async function POST(request: NextRequest) {
         paymentRequired: true,
         orderId: order.id,
         razorpayKeyId: rzpKeyId,
+        invoice,
       });
     } catch (rzpErr) {
       console.error('Razorpay order creation failed:', rzpErr);

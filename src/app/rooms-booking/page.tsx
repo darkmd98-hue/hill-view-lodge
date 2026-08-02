@@ -14,6 +14,7 @@ import {
   fadeUp,
   staggerContainer,
 } from '@/lib/animations';
+import { calculateInvoice, EXTRA_ADULT_PRICE, EXTRA_CHILD_PRICE } from '@/lib/pricing';
 import {
   Calendar,
   MapPin,
@@ -29,6 +30,10 @@ import {
   Coffee,
   ShieldCheck,
   Mountain,
+  Plus,
+  Minus,
+  Receipt,
+  Users,
 } from 'lucide-react';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -99,6 +104,8 @@ export default function RoomsBookingWizard() {
     customerEmail: '',
     checkInDate: '',
     roomUnitId: '',
+    extraAdults: 0,
+    extraChildren: 0,
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -244,11 +251,21 @@ export default function RoomsBookingWizard() {
   const dayOfWeek = useMemo(() => {
     if (!form.checkInDate) return '';
     const date = new Date(form.checkInDate);
-    // Handle timezone offsets to represent local day of chosen date
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() + offset * 60 * 1000);
     return localDate.toLocaleDateString('en-IN', { weekday: 'long' });
   }, [form.checkInDate]);
+
+  // Compute live invoice breakdown
+  const currentInvoice = useMemo(() => {
+    if (!selectedRoom) return null;
+    return calculateInvoice({
+      pricePerNight: selectedRoom.price_per_night,
+      nights: 1,
+      extraAdults: form.extraAdults || 0,
+      extraChildren: form.extraChildren || 0,
+    });
+  }, [selectedRoom, form.extraAdults, form.extraChildren]);
 
   // Client-Side Validation
   const validateForm = useCallback((fields: BookingFormData): Record<string, string> => {
@@ -427,6 +444,9 @@ export default function RoomsBookingWizard() {
                     bookingId: result.bookingId,
                     checkInDate: form.checkInDate,
                     roomNumber: roomUnits.find(u => u.id === form.roomUnitId)?.room_number || '',
+                    extraAdults: form.extraAdults || 0,
+                    extraChildren: form.extraChildren || 0,
+                    invoice: verifyData.invoice || result.invoice || currentInvoice || undefined,
                   });
                   router.push('/rooms-booking/confirmation');
                 } else {
@@ -479,6 +499,9 @@ export default function RoomsBookingWizard() {
             bookingId: result.bookingId,
             checkInDate: form.checkInDate,
             roomNumber: roomUnits.find(u => u.id === form.roomUnitId)?.room_number || '',
+            extraAdults: form.extraAdults || 0,
+            extraChildren: form.extraChildren || 0,
+            invoice: result.invoice || currentInvoice || undefined,
           });
           router.push('/rooms-booking/confirmation');
         }
@@ -1037,6 +1060,89 @@ export default function RoomsBookingWizard() {
                     {formErrors.roomUnitId && <p className="text-error text-xs">{formErrors.roomUnitId}</p>}
                   </div>
                 )}
+
+                {/* Occupancy & Extra Guests Section */}
+                <div className="md:col-span-2 pt-4 border-t border-black/5 space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-accent" />
+                        Occupancy & Extra Guests
+                      </h3>
+                      <p className="text-xs text-text-muted mt-0.5">
+                        Base price includes {selectedRoom.base_adults || 2} Adults, {selectedRoom.base_children || 1} Child
+                      </p>
+                    </div>
+                    {currentInvoice && (
+                      <div className="text-right">
+                        <span className="text-[10px] text-text-muted uppercase tracking-wider block font-semibold">Estimated Total</span>
+                        <span className="font-extrabold text-accent text-base">₹{currentInvoice.grandTotal}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#f7f4ef]/60 p-4 rounded-2xl border border-black/5">
+                    {/* Extra Adults Stepper */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-text-primary">Extra Adults</span>
+                        <span className="text-text-muted font-mono text-[11px]">+₹{EXTRA_ADULT_PRICE}/stay</span>
+                      </div>
+                      <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-black/5 justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, extraAdults: Math.max(0, (prev.extraAdults || 0) - 1) }))}
+                          disabled={(form.extraAdults || 0) <= 0}
+                          className="w-8 h-8 rounded-lg bg-[#f7f4ef] hover:bg-black/5 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-text-primary font-bold cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="font-bold text-sm font-mono">{form.extraAdults || 0}</span>
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, extraAdults: Math.min(selectedRoom.max_extra_adults ?? 2, (prev.extraAdults || 0) + 1) }))}
+                          disabled={(form.extraAdults || 0) >= (selectedRoom.max_extra_adults ?? 2)}
+                          className="w-8 h-8 rounded-lg bg-[#f7f4ef] hover:bg-black/5 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-text-primary font-bold cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {(form.extraAdults || 0) >= (selectedRoom.max_extra_adults ?? 2) && (
+                        <p className="text-[10px] text-amber-700 font-medium">Maximum {selectedRoom.max_extra_adults ?? 2} extra adults allowed for this room category.</p>
+                      )}
+                    </div>
+
+                    {/* Extra Children Stepper */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-text-primary">Extra Children</span>
+                        <span className="text-text-muted font-mono text-[11px]">+₹{EXTRA_CHILD_PRICE}/stay</span>
+                      </div>
+                      <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-black/5 justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, extraChildren: Math.max(0, (prev.extraChildren || 0) - 1) }))}
+                          disabled={(form.extraChildren || 0) <= 0}
+                          className="w-8 h-8 rounded-lg bg-[#f7f4ef] hover:bg-black/5 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-text-primary font-bold cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="font-bold text-sm font-mono">{form.extraChildren || 0}</span>
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, extraChildren: Math.min(selectedRoom.max_extra_children ?? 2, (prev.extraChildren || 0) + 1) }))}
+                          disabled={(form.extraChildren || 0) >= (selectedRoom.max_extra_children ?? 2)}
+                          className="w-8 h-8 rounded-lg bg-[#f7f4ef] hover:bg-black/5 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-text-primary font-bold cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {(form.extraChildren || 0) >= (selectedRoom.max_extra_children ?? 2) && (
+                        <p className="text-[10px] text-amber-700 font-medium">Maximum {selectedRoom.max_extra_children ?? 2} extra children allowed for this room category.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-6 border-t border-black/5 flex justify-end gap-3">
@@ -1150,6 +1256,57 @@ export default function RoomsBookingWizard() {
                   </div>
                 </div>
               </div>
+
+              {/* Itemized Pre-Payment Chargesheet */}
+              {currentInvoice && (
+                <div className="bg-white p-5 rounded-2xl border border-black/10 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-black/5 pb-2">
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                      <Receipt className="w-4 h-4 text-accent" />
+                      Pre-Payment Chargesheet
+                    </h2>
+                    <span className="text-xs font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-full font-mono">
+                      GST Bracket: {currentInvoice.gstRate}%
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">Room rate (₹{selectedRoom.price_per_night} × 1 night)</span>
+                      <span className="font-semibold text-text-primary font-mono">₹{currentInvoice.roomRateTotal}</span>
+                    </div>
+
+                    {(form.extraAdults || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-text-muted">Extra adults ({form.extraAdults} × ₹{EXTRA_ADULT_PRICE})</span>
+                        <span className="font-semibold text-text-primary font-mono">+₹{currentInvoice.extraAdultsCharge}</span>
+                      </div>
+                    )}
+
+                    {(form.extraChildren || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-text-muted">Extra children ({form.extraChildren} × ₹{EXTRA_CHILD_PRICE})</span>
+                        <span className="font-semibold text-text-primary font-mono">+₹{currentInvoice.extraChildrenCharge}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between pt-1 border-t border-black/5 font-medium">
+                      <span className="text-text-muted">Subtotal</span>
+                      <span className="text-text-primary font-mono font-semibold">₹{currentInvoice.subtotal}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-text-muted">GST ({currentInvoice.gstRate}%)</span>
+                      <span className="font-semibold text-text-primary font-mono">₹{currentInvoice.gstAmount}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2.5 border-t border-black/10 text-base font-bold">
+                      <span className="text-text-primary">Grand Total Chargeable</span>
+                      <span className="text-accent text-lg font-extrabold font-mono">₹{currentInvoice.grandTotal}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {submitError && (
                 <div className="text-error bg-error-bg p-4 rounded-2xl text-sm border border-error/10 flex items-center gap-2">

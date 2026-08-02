@@ -8,7 +8,7 @@ import type { BookingFormData, Room, BookingResult } from './types';
 export async function fetchRooms(): Promise<Room[]> {
   const { data, error } = await getSupabase()
     .from('rooms')
-    .select('id, name, description, price_per_night, available_units, thumbnail_image_url, image_url, occupancy_info')
+    .select('id, name, description, price_per_night, available_units, thumbnail_image_url, image_url, occupancy_info, base_adults, base_children, max_extra_adults, max_extra_children')
     .order('price_per_night', { ascending: true });
 
   if (error) {
@@ -47,6 +47,8 @@ export async function submitBooking(
         customerEmail: formData.customerEmail,
         checkInDate: formData.checkInDate,
         roomUnitId: formData.roomUnitId,
+        extraAdults: formData.extraAdults || 0,
+        extraChildren: formData.extraChildren || 0,
         token,
       }),
     });
@@ -68,6 +70,7 @@ export async function submitBooking(
       paymentRequired: data.paymentRequired,
       orderId: data.orderId,
       razorpayKeyId: data.razorpayKeyId,
+      invoice: data.invoice,
     };
   } catch (err) {
     console.error('Booking request failed:', err);

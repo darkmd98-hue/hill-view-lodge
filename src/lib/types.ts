@@ -1,3 +1,5 @@
+import type { InvoiceBreakdown } from './pricing';
+
 // ── Room (from Supabase) ──
 
 export interface Room {
@@ -10,6 +12,10 @@ export interface Room {
   thumbnail_image_url?: string;
   image_url?: string;
   occupancy_info?: string;
+  base_adults?: number;
+  base_children?: number;
+  max_extra_adults?: number;
+  max_extra_children?: number;
 }
 
 // ── Booking Form ──
@@ -28,6 +34,8 @@ export interface BookingFormData {
   customerEmail: string;
   checkInDate: string; // YYYY-MM-DD format
   roomUnitId?: string;  // individual room unit UUID
+  extraAdults?: number;
+  extraChildren?: number;
 }
 
 // ── Booking Result (from create_booking RPC) ──
@@ -41,6 +49,7 @@ export type BookingResult =
       paymentRequired?: boolean;
       orderId?: string;
       razorpayKeyId?: string;
+      invoice?: InvoiceBreakdown;
     }
   | { success: false; error: string };
 
@@ -54,6 +63,9 @@ export interface BookingConfirmation {
   bookingId: string;
   checkInDate: string;
   roomNumber?: string;
+  extraAdults?: number;
+  extraChildren?: number;
+  invoice?: InvoiceBreakdown;
 }
 
 // ── Navigation ──
