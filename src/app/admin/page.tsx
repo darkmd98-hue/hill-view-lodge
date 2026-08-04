@@ -625,6 +625,7 @@ export default function AdminDashboard() {
           </span>
         </div>
         <button
+          type="button"
           onClick={handleLogout}
           className="flex items-center gap-1.5 text-xs text-text-muted hover:text-error transition-colors px-3 py-1.5 rounded-lg hover:bg-black/5 cursor-pointer font-semibold"
         >
@@ -663,6 +664,7 @@ export default function AdminDashboard() {
           <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider px-2 mb-2 hidden lg:block">Management</p>
           <div className="flex lg:flex-col gap-1.5 min-w-max lg:min-w-0">
             <button
+              type="button"
               onClick={() => setActiveTab('rooms')}
               className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
                 activeTab === 'rooms' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
@@ -672,6 +674,7 @@ export default function AdminDashboard() {
               Room Pricing
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('units')}
               className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
                 activeTab === 'units' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
@@ -681,6 +684,7 @@ export default function AdminDashboard() {
               Room Units
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('staff')}
               className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
                 activeTab === 'staff' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
@@ -690,6 +694,7 @@ export default function AdminDashboard() {
               Staff Details
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('bookings')}
               className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
                 activeTab === 'bookings' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
@@ -699,6 +704,7 @@ export default function AdminDashboard() {
               Customer Bookings
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('location')}
               className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all text-left cursor-pointer whitespace-nowrap ${
                 activeTab === 'location' ? 'bg-accent/10 text-accent font-bold' : 'text-text-muted hover:bg-black/5'
@@ -722,6 +728,7 @@ export default function AdminDashboard() {
                   <p className="text-text-muted text-sm mt-1">Configure room prices and check availability slots.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsNewCategoryOpen(true)}
                   className="flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg shadow-accent/25 transition-all cursor-pointer"
                 >
@@ -742,8 +749,10 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between pb-3 border-b border-black/5">
                       <h2 className="font-bold text-text-primary text-lg">Create New Room Category</h2>
                       <button
+                        type="button"
                         onClick={() => setIsNewCategoryOpen(false)}
                         className="text-text-muted hover:text-text-primary cursor-pointer"
+                        aria-label="Close"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -909,6 +918,7 @@ export default function AdminDashboard() {
                                 {isEditing ? (
                                   <div className="flex justify-center gap-1.5">
                                     <button
+                                      type="button"
                                       onClick={() => handleSaveRoom(room.id)}
                                       className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
                                       title="Save Changes"
@@ -916,6 +926,7 @@ export default function AdminDashboard() {
                                       <Save className="w-4 h-4" />
                                     </button>
                                     <button
+                                      type="button"
                                       onClick={() => setEditingRoomId(null)}
                                       className="p-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
                                       title="Cancel"
@@ -925,6 +936,7 @@ export default function AdminDashboard() {
                                   </div>
                                 ) : (
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setEditingRoomId(room.id);
                                       setEditPrice(room.price_per_night);
@@ -1047,6 +1059,7 @@ export default function AdminDashboard() {
                               <td className="py-4 px-6">
                                 <div className="flex items-center justify-center gap-3">
                                   <button
+                                    type="button"
                                     onClick={() => handleToggleUnitStatus(unit.id, unit.status || 'active')}
                                     className={`text-xs font-semibold px-3 py-1 rounded-full border transition-all cursor-pointer ${
                                       unit.status !== 'out_of_service'
@@ -1057,6 +1070,7 @@ export default function AdminDashboard() {
                                     {unit.status !== 'out_of_service' ? 'Set Out of Service' : 'Set Active'}
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={() => handleDeleteUnit(unit.id)}
                                     className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                     title="Delete Room Unit"
@@ -1093,6 +1107,7 @@ export default function AdminDashboard() {
                 {!isStaffFormOpen && (
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
                       onClick={handleExportStaff}
                       disabled={staff.length === 0}
                       className={`flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-full transition-all border ${
@@ -1105,6 +1120,7 @@ export default function AdminDashboard() {
                       Export Staff (.xlsx)
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setStaffForm({
                           id: '',
@@ -1139,8 +1155,10 @@ export default function AdminDashboard() {
                         {staffForm.id ? 'Modify Employee Info' : 'New Employee Onboarding'}
                       </h2>
                       <button
+                        type="button"
                         onClick={() => setIsStaffFormOpen(false)}
                         className="text-text-muted hover:text-text-primary cursor-pointer"
+                        aria-label="Close"
                       >
                         <X className="w-5 h-5" />
                       </button>
@@ -1261,6 +1279,7 @@ export default function AdminDashboard() {
                               <td className="py-4 px-6 text-center">
                                 <div className="flex justify-center gap-1.5">
                                   <button
+                                    type="button"
                                     onClick={() => handleEditStaff(member)}
                                     className="p-1.5 text-accent bg-accent/5 hover:bg-accent/10 rounded-lg transition-colors cursor-pointer"
                                     title="Edit Employee"
@@ -1268,6 +1287,7 @@ export default function AdminDashboard() {
                                     <Edit2 className="w-4 h-4" />
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={() => handleDeleteStaff(member.id)}
                                     className="p-1.5 text-error bg-error/5 hover:bg-error/10 rounded-lg transition-colors cursor-pointer"
                                     title="Delete Employee"
@@ -1296,6 +1316,7 @@ export default function AdminDashboard() {
                   <p className="text-text-muted text-sm mt-1">Search, audit, and export bookings.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleExportBookings}
                   disabled={filteredBookings.length === 0}
                   className={`flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-full transition-all border ${
@@ -1422,6 +1443,7 @@ export default function AdminDashboard() {
                               </td>
                               <td className="py-4 px-6 text-center">
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteBooking(b.id)}
                                   disabled={deletingBookingId === b.id}
                                   className="p-1.5 text-error bg-error/5 hover:bg-error/10 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
@@ -1474,7 +1496,7 @@ export default function AdminDashboard() {
                         required
                       />
                       <p className="text-xs text-text-muted">
-                        This link is displayed publically as the &quot;Get Directions&quot; navigation button on the contact page.
+                        This link is displayed publicly as the &quot;Get Directions&quot; navigation button on the contact page.
                       </p>
                     </div>
 
